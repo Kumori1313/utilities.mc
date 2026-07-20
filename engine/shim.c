@@ -19,6 +19,7 @@
 
 #include <emscripten.h>
 #include <limits.h>
+#include <math.h>
 #include "cubiomes/generator.h"
 #include "cubiomes/util.h"
 
@@ -70,13 +71,23 @@ int biome_colors(unsigned char *out) {
     return 0;
 }
 
-// Approximate Overworld surface height, with the matching biome ids in one pass.
+// Approximate Overworld surface height, with the biome at that surface.
 //
 // Fixed 1:4 horizontal scale — x/z/w/h are BIOME coordinates, not blocks. Unlike
 // gen_biomes there is no scale parameter, because Cubiomes' mapApproxHeight offers none.
 //
 // `y_out` receives w*h floats (height in blocks); `ids_out`, if non-NULL, receives w*h
 // biome ids. Both are row-major, out[j*w + i], matching gen_biomes.
+//
+// IDs ARE RESAMPLED AT THE SURFACE, deliberately not taken from mapApproxHeight's own id
+// output. That output comes from sampleBiomeNoise(..., y=0, ...) — i.e. the biome at
+// y=0, not at the terrain surface. Since 1.18 biomes are three-dimensional, so for many
+// seeds those ids are CAVE biomes: at seed 42 the origin reports lush_caves where the
+// surface is dark_forest, and 3098 of 4096 cells in one tile disagree. Colouring terrain
+// with them produces a map that looks entirely plausible and is wrong.
+//
+// The resampling loop lives here rather than in the caller so it costs no JS boundary
+// crossings and cannot be forgotten by a second caller.
 //
 // Overworld only: Cubiomes returns a sentinel for the Nether (a flat 127) and for the End,
 // rather than filling the buffer. Those are surfaced as -1 here so a caller cannot mistake
@@ -87,7 +98,19 @@ int gen_heights(int x, int z, int w, int h, float *y_out, int *ids_out) {
     if (w <= 0 || h <= 0) return -1;
     if (g.dim != DIM_OVERWORLD) return -1;
 
-    return mapApproxHeight(y_out, ids_out, &g, &g_sn, x, z, w, h) == 0 ? 0 : -1;
+    if (mapApproxHeight(y_out, NULL, &g, &g_sn, x, z, w, h) != 0) return -1;
+
+    if (ids_out) {
+        for (int j = 0; j < h; j++) {
+            for (int i = 0; i < w; i++) {
+                float hy = y_out[j*w + i];
+                // getBiomeAt's y is in biome coordinates at scale 4, so height/4.
+                int cy = (int)floorf(hy / 4.0f);
+                ids_out[j*w + i] = getBiomeAt(&g, 4, x + i, cy, z + j);
+            }
+        }
+    }
+    return 0;
 }
 
 // Single-point lookup. Returns the biome id, or -1 on failure.
