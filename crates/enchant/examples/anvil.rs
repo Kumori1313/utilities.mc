@@ -7,10 +7,25 @@
 //! prior-work count (times already anvil-worked; default 0). Use `book` for an enchanted
 //! book sacrifice.
 //!
+//! # Two things that make in-game costs differ from a naive guess — get these right
+//! before deciding a number is "wrong":
+//!
+//! * **Prior work compounds.** Every anvil operation raises an item's prior-work count, and
+//!   each input's `2^pw - 1` penalty is added to the next combine. A **book that already
+//!   holds two or more enchantments was itself made in an anvil**, so in survival it has
+//!   `pw >= 1` — spell it out as `book:1`, or the cost comes out one (or more) levels low.
+//!   The tool warns when you give a multi-enchantment book `pw 0`, since that is rarely a
+//!   real survival item.
+//! * **Item source costs double a book.** Moving an enchantment off another *item* uses the
+//!   full multiplier; off a *book*, half. So `sword + sword sharpness=5` costs twice
+//!   `sword + book sharpness=5`. And which item is the target vs the sacrifice decides which
+//!   enchantment transfers — swapping them can change the cost a lot.
+//!
 //! Examples:
 //!   anvil diamond_sword + book sharpness=5
 //!   anvil diamond_sword sharpness=3 + diamond_sword sharpness=3
-//!   anvil diamond_pickaxe:2 efficiency=4 + book:1 fortune=3 unbreaking=3
+//!   anvil diamond_pickaxe + book:1 fortune=3 unbreaking=3   # book pre-combined -> pw 1
+//!   anvil diamond_pickaxe:1 fortune=3 + diamond_pickaxe:1 unbreaking=3  # two worked items
 //!
 //! The printed cost is what a survival anvil's level counter should show — compare it there.
 
@@ -73,6 +88,20 @@ fn main() {
     });
     let target = parse_side(&args[..split]);
     let sacrifice = parse_side(&args[split + 1..]);
+
+    // A multi-enchantment book at pw 0 is almost always a modelling slip: in survival such
+    // a book was combined from single-enchantment books and so carries prior work. Warn,
+    // don't block — a creative/command book really can be pw 0.
+    for (role, it) in [("target", &target), ("sacrifice", &sacrifice)] {
+        if it.is_book() && it.enchantments.len() >= 2 && it.prior_work == 0 {
+            eprintln!(
+                "warning: {role} is a book with {} enchantments at prior work 0. A survival \
+                 book with multiple enchantments was combined in an anvil first, so it has \
+                 prior work >= 1 — try `book:1`. (Ignore this for a creative/command book.)",
+                it.enchantments.len()
+            );
+        }
+    }
 
     let r = combine(&target, &sacrifice, rename);
 
