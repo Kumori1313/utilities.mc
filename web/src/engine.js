@@ -31,6 +31,10 @@ export async function boot() {
     setWorld: Module.cwrap('set_world', 'number', ['number', 'number', 'number']),
     genHeights: Module.cwrap('gen_heights', 'number',
                              ['number', 'number', 'number', 'number', 'number', 'number']),
+    // gen_biomes takes CELL coords at any of scales 1/4/16/64/256 — the 2D map drives this
+    // at a scale chosen from the zoom level. get_biome_at (3D hover) only allows 1/4.
+    genBiomes: Module.cwrap('gen_biomes', 'number',
+                            ['number', 'number', 'number', 'number', 'number', 'number', 'number', 'number']),
     biomeColors: Module.cwrap('biome_colors', 'number', ['number']),
     biomeAt: Module.cwrap('get_biome_at', 'number', ['number', 'number', 'number', 'number']),
     biome2str: Module.cwrap('biome2str', 'string', ['number', 'number']),

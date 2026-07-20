@@ -15,19 +15,28 @@
     <span class="ver">Minecraft <strong id="mcver">1.21.3</strong></span>
   </nav>
 
-  <!-- Seed map: full-canvas 3D view with a floating control panel -->
+  <!-- Seed map: a 2D biome canvas (default) and a 3D mesh canvas, one shown at a time -->
   <section id="view-map" class="view active">
-    <canvas id="view"></canvas>
+    <canvas id="view2d"></canvas>
+    <canvas id="view3d" class="hidden"></canvas>
     <div id="panel">
+      <div id="map-mode" class="seg">
+        <button data-mode="2d" class="active">2D</button>
+        <button data-mode="3d">3D</button>
+      </div>
       <p class="version">World generation differs between versions, so this map is only
         correct for the pinned one.</p>
       <label>seed <input id="seed" value="1" spellcheck="false"></label>
       <label>x <input id="cx" value="0" size="7"></label>
       <label>z <input id="cz" value="0" size="7"></label>
       <button id="go">load</button>
+      <label id="rdist-wrap" class="hidden">render distance
+        <input id="rdist" type="range" min="1" max="8" value="3">
+        <span id="rdist-val">3</span></label>
       <div id="status">starting…</div>
       <dl id="stats"></dl>
-      <p class="hint">drag to orbit · scroll to zoom · right-drag to pan</p>
+      <p class="hint" id="map2d-hint">scroll to zoom (toward cursor) · hover to read biome</p>
+      <p class="hint hidden" id="map3d-hint">drag to orbit · scroll to zoom · right-drag to pan</p>
       <p class="hint" id="hover">—</p>
     </div>
   </section>

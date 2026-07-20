@@ -26,13 +26,28 @@ body { font: 13px/1.5 system-ui, sans-serif; color: #e6e8ee; display: flex; flex
 .form-view.active { display: block; }
 
 /* --- seed map --- */
-#view { display: block; width: 100%; height: 100%; }
+#view2d, #view3d { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+#view2d { image-rendering: pixelated; cursor: crosshair; background: #0a0c12; }
+.hidden { display: none !important; }
 #panel {
   position: absolute; top: 1rem; left: 1rem; width: 18rem;
   padding: 1rem; border-radius: .6rem;
   background: #0b0d13d9; border: 1px solid var(--line); backdrop-filter: blur(6px);
 }
-.version { margin: 0 0 .9rem; font-size: 11.5px; color: var(--muted); }
+.version { margin: .6rem 0 .9rem; font-size: 11.5px; color: var(--muted); }
+
+/* 2D/3D segmented toggle */
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: .35rem; overflow: hidden; }
+.seg button {
+  font: inherit; padding: .25rem .8rem; border: none; cursor: pointer;
+  background: none; color: var(--muted);
+}
+.seg button.active { background: #6ea8fe26; color: #cfe0ff; }
+.seg button:not(.active):hover { background: #ffffff0d; color: #e6e8ee; }
+
+#rdist-wrap { flex-direction: row; align-items: center; gap: .5rem; margin-top: .6rem; }
+#rdist { width: 8rem; }
+#rdist-val { font-variant-numeric: tabular-nums; color: #cbd2e6; }
 
 /* --- forms (shared by calculators) --- */
 .form-view { max-width: 44rem; margin: 0 auto; }
