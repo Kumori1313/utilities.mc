@@ -30,6 +30,8 @@
 //! JS generates and copies, this crate owns tile math, caching, and lookups.
 
 pub mod cache;
+pub mod enchant_web;
+pub mod portal_web;
 pub mod tiles;
 
 use cache::{Tile, TileCache, World};

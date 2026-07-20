@@ -4,6 +4,8 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { SCALE, boot, fetchTile, parseSeed } from './engine.js';
 import { Y_SCALE, buildTileMesh, disposeMesh } from './terrain.js';
+import { setupEnchant } from './enchant-ui.js';
+import { setupPortal } from './portal-ui.js';
 
 const $ = (id) => document.getElementById(id);
 const status = $('status');
@@ -14,11 +16,11 @@ const setStatus = (msg, cls = '') => { status.textContent = msg; status.classNam
 /// tab dies. 3 -> 7x7 tiles -> a 1792-block square at scale 4.
 const TILE_RADIUS = 3;
 
-let engine, View, palette, view, mcVersion;
+let engine, View, palette, app, view, mcVersion;
 const meshes = new Map(); // "tx,tz" -> THREE.Mesh
 
 try {
-  ({ engine, View, palette } = await boot());
+  ({ engine, View, palette, app } = await boot());
 } catch (e) {
   setStatus(`failed to load WASM modules:\n${e}\n\n` +
             `Run scripts/build-all.sh first, then npm run dev.`, 'err');
@@ -27,6 +29,22 @@ try {
 
 mcVersion = engine.str2mc('1.21.3');
 if (mcVersion < 0) { setStatus('engine does not know version 1.21.3', 'err'); throw new Error(); }
+
+// The two calculator panels are pure form UIs over the shared `app` module. Build them
+// once now — they hold no per-frame state, unlike the seed map.
+setupEnchant($('view-enchant'), app);
+setupPortal($('view-portal'), app);
+
+// Tab switching. The seed map's render loop keeps running while hidden (cheap — nothing
+// re-meshes), but a resize is forced when it becomes visible so the canvas isn't stale.
+const views = document.querySelectorAll('.view');
+const tabs = document.querySelectorAll('#tabs button');
+tabs.forEach((btn) => btn.addEventListener('click', () => {
+  const tab = btn.dataset.tab;
+  tabs.forEach((b) => b.classList.toggle('active', b === btn));
+  views.forEach((v) => v.classList.toggle('active', v.id === `view-${tab}`));
+  if (tab === 'map') resize(true);
+}));
 
 // --- three.js scene ---------------------------------------------------------
 const canvas = $('view');
@@ -49,9 +67,12 @@ const sun = new THREE.DirectionalLight(0xffffff, 1.5);
 sun.position.set(-0.6, 1, 0.4);
 scene.add(sun);
 
-function resize() {
+function resize(force = false) {
   const { clientWidth: w, clientHeight: h } = canvas;
-  if (canvas.width !== w || canvas.height !== h) {
+  // While the map tab is hidden the canvas measures 0x0; skip so we don't set a 0-sized
+  // (and NaN-aspect) camera. The frame loop re-resizes once it's visible again.
+  if (w === 0 || h === 0) return;
+  if (force || canvas.width !== w || canvas.height !== h) {
     renderer.setSize(w, h, false);
     camera.aspect = w / h;
     camera.updateProjectionMatrix();

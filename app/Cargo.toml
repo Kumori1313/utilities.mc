@@ -10,3 +10,9 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 wasm-bindgen = "0.2.126"
+
+# The pure-Rust calculators. They stay independent, natively-testable crates; `app` only
+# adds the thin wasm-bindgen surface that puts them in the browser (Part 10.5's "thin
+# wrapper module" discipline), so one wasm module serves all three tools.
+enchant = { path = "../crates/enchant" }
+portal = { path = "../crates/portal" }

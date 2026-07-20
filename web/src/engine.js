@@ -47,7 +47,9 @@ export async function boot() {
   const palette = new Uint8Array(Module.HEAPU8.subarray(cptr, cptr + 768)); // copy
   Module._free(cptr);
 
-  return { engine, View, palette };
+  // `app` also carries the enchant_*/anvil_*/portal_* exports — the same initialised
+  // module — so the calculator panels share this one instance rather than re-loading.
+  return { engine, View, palette, app };
 }
 
 /// Parse a seed the way Minecraft does: a numeric string is the seed itself, anything else
