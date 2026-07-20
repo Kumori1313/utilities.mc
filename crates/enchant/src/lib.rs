@@ -10,5 +10,7 @@
 //! makes every layer above it produce confident nonsense.
 
 pub mod java_random;
+pub mod table;
 
 pub use java_random::JavaRandom;
+pub use table::{offered_levels, raw_levels};

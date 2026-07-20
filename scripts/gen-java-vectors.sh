@@ -6,7 +6,9 @@
 # defeats the entire purpose of having a reference.
 #
 # Emits a Rust table on stdout. Regenerate with:
-#   scripts/gen-java-vectors.sh > crates/enchant/tests/vectors/java_random.rs
+#   scripts/gen-java-vectors.sh > crates/enchant/tests/vectors/java_random.rs && cargo fmt
+# The trailing `cargo fmt` matters: the checked-in file is rustfmt-formatted, so skipping it
+# leaves a large whitespace-only diff that obscures whether any value actually moved.
 set -euo pipefail
 
 command -v java >/dev/null 2>&1 || {

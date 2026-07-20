@@ -4,7 +4,7 @@
 //! a hand-copied expectation is indistinguishable from a bug in the implementation, which
 //! would defeat the purpose of having a reference at all.
 //!
-//! Until `vectors_java_random.rs` exists, the gate is UNMET and the test fails loudly
+//! Until `vectors/java_random.rs` exists, the gate is UNMET and the test fails loudly
 //! rather than passing vacuously — a skipped foundational test that silently reports
 //! success is worse than no test.
 
@@ -12,7 +12,9 @@ use enchant::JavaRandom;
 
 // In a subdirectory so cargo does not auto-discover it as a (test-free) integration
 // target of its own. Regenerate with:
-//   scripts/gen-java-vectors.sh > crates/enchant/tests/vectors/java_random.rs
+//   scripts/gen-java-vectors.sh > crates/enchant/tests/vectors/java_random.rs && cargo fmt
+// The trailing `cargo fmt` matters: the checked-in file is rustfmt-formatted, so skipping
+// it leaves a large whitespace-only diff that obscures whether any value actually moved.
 #[path = "vectors/java_random.rs"]
 mod vectors;
 
@@ -34,7 +36,11 @@ fn next_int_matches_jdk() {
     for &(seed, expected) in vectors::NEXT_INT {
         let mut r = JavaRandom::new(seed);
         let got: Vec<i32> = (0..10).map(|_| r.next_int()).collect();
-        assert_eq!(got.as_slice(), expected.as_slice(), "nextInt() diverged for seed {seed}");
+        assert_eq!(
+            got.as_slice(),
+            expected.as_slice(),
+            "nextInt() diverged for seed {seed}"
+        );
     }
 }
 
@@ -56,7 +62,11 @@ fn next_long_matches_jdk() {
     for &(seed, expected) in vectors::NEXT_LONG {
         let mut r = JavaRandom::new(seed);
         let got: Vec<i64> = (0..6).map(|_| r.next_long()).collect();
-        assert_eq!(got.as_slice(), expected.as_slice(), "nextLong() diverged for seed {seed}");
+        assert_eq!(
+            got.as_slice(),
+            expected.as_slice(),
+            "nextLong() diverged for seed {seed}"
+        );
     }
 }
 

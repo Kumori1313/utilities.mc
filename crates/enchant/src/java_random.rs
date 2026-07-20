@@ -69,11 +69,7 @@ impl JavaRandom {
             let bits = self.next(31);
             let val = bits % bound;
             // Java: `bits - val + (bound - 1) < 0` detects i32 overflow and retries.
-            if bits
-                .wrapping_sub(val)
-                .wrapping_add(bound.wrapping_sub(1))
-                >= 0
-            {
+            if bits.wrapping_sub(val).wrapping_add(bound.wrapping_sub(1)) >= 0 {
                 return val;
             }
         }
