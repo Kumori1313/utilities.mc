@@ -29,7 +29,7 @@ fn main() {
         .map(|(i, n)| (n.as_str(), i))
         .collect();
 
-    out.push_str("pub struct EnchantmentData {\n    pub name: &'static str,\n    pub weight: i32,\n    pub max_level: i32,\n    pub min_cost: (i32, i32),\n    pub max_cost: (i32, i32),\n    pub anvil_cost: i32,\n    /// Indices into ENCHANTMENTS. Already the SYMMETRIC closure — see the data file.\n    pub exclusive_with: &'static [usize],\n    /// Items this can be rolled onto at an enchanting table.\n    pub primary_items: &'static [&'static str],\n    /// Whether an enchanting table can produce this at all. 7 of the 42 cannot be:\n    /// filtering only on item applicability would wrongly roll mending, soul_speed, etc.\n    pub in_enchanting_table: bool,\n    pub treasure: bool,\n}\n\n");
+    out.push_str("pub struct EnchantmentData {\n    pub name: &'static str,\n    pub weight: i32,\n    pub max_level: i32,\n    pub min_cost: (i32, i32),\n    pub max_cost: (i32, i32),\n    /// Per-level ITEM cost multiplier for anvil combining. Book multiplier is half\n    /// (see anvil::book_cost_multiplier). Verified against the wiki: fire_aspect=4\n    /// matches its documented 4x-from-item / 2x-from-book.\n    pub anvil_cost: i32,\n    /// Indices into ENCHANTMENTS. Already the SYMMETRIC closure — see the data file.\n    pub exclusive_with: &'static [usize],\n    /// Items this can be ROLLED onto at an enchanting table (primary set).\n    pub primary_items: &'static [&'static str],\n    /// Items this can be APPLIED to, including via anvil/book — broader than\n    /// primary_items (e.g. sharpness is primary on swords but supported on axes too).\n    pub supported_items: &'static [&'static str],\n    /// Whether an enchanting table can produce this at all. 7 of the 42 cannot be:\n    /// filtering only on item applicability would wrongly roll mending, soul_speed, etc.\n    pub in_enchanting_table: bool,\n    pub treasure: bool,\n}\n\n");
 
     let tags = v["item_tags"].as_object().unwrap();
     let resolve = |key: &serde_json::Value| -> Vec<String> {
@@ -65,8 +65,15 @@ fn main() {
             items = resolve(&e["supported_items"]);
         }
         let items: Vec<String> = items.iter().map(|i| format!("{i:?}")).collect();
+        // Anvil applicability uses the full supported set (fall back to primary if a
+        // future enchantment declares no supported_items).
+        let mut supported = resolve(&e["supported_items"]);
+        if supported.is_empty() {
+            supported = resolve(&e["primary_items"]);
+        }
+        let supported: Vec<String> = supported.iter().map(|i| format!("{i:?}")).collect();
         out.push_str(&format!(
-            "    EnchantmentData {{ name: {:?}, weight: {}, max_level: {}, min_cost: ({}, {}), max_cost: ({}, {}), anvil_cost: {}, exclusive_with: &[{}], primary_items: &[{}], in_enchanting_table: {}, treasure: {} }},\n",
+            "    EnchantmentData {{ name: {:?}, weight: {}, max_level: {}, min_cost: ({}, {}), max_cost: ({}, {}), anvil_cost: {}, exclusive_with: &[{}], primary_items: &[{}], supported_items: &[{}], in_enchanting_table: {}, treasure: {} }},\n",
             name,
             e["weight"].as_i64().unwrap(),
             e["max_level"].as_i64().unwrap(),
@@ -77,6 +84,7 @@ fn main() {
             e["anvil_cost"].as_i64().unwrap(),
             excl.join(", "),
             items.join(", "),
+            supported.join(", "),
             e["in_enchanting_table"].as_bool().unwrap(),
             e["treasure"].as_bool().unwrap(),
         ));

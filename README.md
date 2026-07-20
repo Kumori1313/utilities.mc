@@ -63,7 +63,7 @@ while being wrong. Self-agreement is not correctness.
 |---|---|
 | Seed map (Parts 0–8) | Pipeline verified end to end; renderer not yet visually reviewed |
 | Portal converter | Complete |
-| Enchantment calculator | Complete, **not yet validated against a real game** (Part 10.5) |
+| Enchantment calculator | Table roll cross-referenced against an external calculator; anvil calculator (10.6) built, its rules pinned to the wiki but **not yet cross-checked against a real anvil** |
 
 The enchantment calculator's offered-level seeding, its material enchantability values,
 and its roll sequence are each individually plausible and none has been confirmed against

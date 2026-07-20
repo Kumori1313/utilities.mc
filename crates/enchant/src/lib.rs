@@ -9,11 +9,13 @@
 //! real JDK before anything is stacked on top of it, because a desynchronized stream
 //! makes every layer above it produce confident nonsense.
 
+pub mod anvil;
 pub mod data;
 pub mod enchant;
 pub mod java_random;
 pub mod table;
 
+pub use anvil::{AnvilItem, CombineResult, combine, combine_sequence};
 pub use data::{ENCHANTMENTS, MC_VERSION, enchantability};
 pub use enchant::{Roll, enchantments_in_slot};
 pub use java_random::JavaRandom;
