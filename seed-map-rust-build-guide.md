@@ -5,7 +5,7 @@ compiled to WebAssembly. Three tools share one codebase and one deployment:
 
 | Tool | Guide | Depends on |
 |---|---|---|
-| **Seed map renderer** — 3D biome/terrain view for any seed | Parts 0–9 | Cubiomes (C, via Emscripten) |
+| **Seed map renderer** — 2D/3D biome & terrain view for any seed | Parts 0–9, 12 | Cubiomes (C, via Emscripten) |
 | **Enchantment calculator** — predicts enchanting-table results and anvil combine costs | Part 10 | Pure Rust |
 | **Nether ↔ Overworld converter** — portal coordinate & linking math | Part 11 | Pure Rust |
 
@@ -840,3 +840,138 @@ actually have is "will my two portals link?" — a different and more valuable q
       the cause of most unintended portal linking, and worth warning about explicitly (11.2)
 - [ ] Neither part depends on Cubiomes or Emscripten — **keep them out of `engine/`** so they
       stay on the easy side of the Part 0 libc boundary (10.0)
+
+---
+
+# Part 12 — Seed Map Enhancements
+
+Extensions to the shipped seed map (Parts 0–9), in recommended build order. Each builds on
+the architecture already in place: the `engine/` shim, the Rust `View` tile cache (keyed by
+`{tx, tz, scale}`), and the Three.js frontend. Two facts from that architecture make most of
+this cheaper than it looks, and are worth stating up front because the sections lean on them:
+
+- **`gen_biomes` already generates at five scales** — 1, 4, 16, 64, 256 — and **the tile
+  cache already keys on scale.** Coarse scales sample a large area with few cells; fine
+  scales are block-accurate. That is exactly what a zoomable 2D map needs, so 12.2 mostly
+  wires up existing capability rather than adding it.
+- **`gen_heights` is scale-4 only** (Cubiomes' `mapApproxHeight` takes no scale). The 3D
+  terrain therefore stays at scale 4; the 2D map, which needs no heights, is free to use any
+  scale.
+
+Order below is deliberate: a trivial warm-up, then the 2D map (which becomes the default and
+is the largest single change), then structures (highest value, highest verification risk),
+then flight controls (polish for what is now the secondary view).
+
+## 12.1 — Adjustable render distance (3D)
+
+The smallest change, worth doing first to re-familiarise with the tiling loop.
+
+- [ ] `TILE_RADIUS` is currently a hardcoded const in the frontend (tiles within a Chebyshev
+      radius of the camera focus get meshed). Expose it as a slider, and re-run the tiling
+      refresh when it changes.
+- [ ] **Cap it.** A radius `R` meshes `(2R+1)²` tiles, each a 64×64 grid (~8k triangles). At
+      `R=8` that is 289 tiles / ~2.3M triangles — fine on desktop, punishing on a phone. Clamp
+      to ~8 and treat anything above as opt-in.
+- [ ] **Raise the cache capacity alongside the radius.** The LRU tile cache has a fixed
+      capacity; if the visible tile count exceeds it, tiles are evicted and immediately
+      re-fetched every frame — cache thrashing that looks like a stutter, not an error. The
+      capacity must comfortably exceed `(2R+1)²` at the maximum radius.
+- [ ] Changing the radius re-meshes; a shrink should also **dispose** the now-out-of-range
+      meshes (geometry + material) rather than just hiding them, or memory climbs as the user
+      fiddles the slider.
+
+## 12.2 — 2D map mode, made the default, with scroll-to-zoom
+
+The anchor of this part. A top-down biome map is *simpler and faster* to render than the 3D
+mesh — it is a coloured image, not geometry — and it is what most seed tools show, so it is
+the right default. The 3D view moves behind a toggle.
+
+- [ ] **New renderer, shared data.** Draw a 2D canvas where each biome cell is a coloured
+      pixel/rect, using the same `biome_colors` palette the 3D mesh uses. Reuse the tile cache
+      and `gen_biomes` — this is a second consumer of the existing tiles, not a second data
+      path. Do **not** call `gen_heights` here; 2D needs biomes only.
+- [ ] **Zoom selects the Cubiomes scale**, and this is the whole point of a 2D map over the
+      fixed-scale 3D one. Map the zoom level to a generation scale — far out → 256 or 64
+      (continent overview, few samples), mid → 16 or 4, fully zoomed → 1 (block-accurate). The
+      cache already distinguishes tiles by scale, so zooming in and back out reuses both scales'
+      tiles instead of regenerating.
+- [ ] **Landmine — never generate scale 1 for a large area.** Scale 1 uses Voronoi sampling and
+      is 16× the cells of scale 4 for the same ground. If the zoom→scale mapping lets scale 1
+      cover a whole screen at low zoom, generation time explodes. Gate scale 1 to high zoom only,
+      where the visible area in blocks is small.
+- [ ] **Landmine — the frontend's tile math currently assumes scale 4.** The block↔cell↔tile
+      conversions in the frontend were written with a fixed `SCALE = 4`. Generalising to a
+      variable scale touches every place that constant appears; audit them, and prefer routing
+      the math through the Rust `View` (which already parameterises on scale) over duplicating it
+      in JS.
+- [ ] **Render fast.** Per-cell `fillRect` is slow at map sizes; build an `ImageData` (or a
+      small offscreen canvas) per tile and `putImageData`/`drawImage` it. One image per cached
+      tile composites cheaply as the view pans.
+- [ ] Make 2D the **default** view on load; the 3D mesh becomes the toggled-in mode. Keep the
+      hover-to-read-biome readout working in both.
+- [ ] **Verification is easier here, not harder** — a 2D map shows a whole region at once, so
+      the Part 8 Chunkbase spot-checks become "does this shape match", not one coordinate at a
+      time. Still pin the version and check.
+
+## 12.3 — Click-and-drag panning (2D)
+
+Depends on 12.2; trivial once the 2D renderer exists.
+
+- [ ] Track pointer movement while dragging, convert the screen-pixel delta to a **world-block**
+      delta using the current zoom's blocks-per-pixel, and offset the view origin. Redraw from
+      cached tiles; fetch newly-exposed tiles at the edges (throttled, as 12.5 does for flight).
+- [ ] **Landmine — the pixel→block conversion is zoom-dependent.** A fixed pixels-per-block will
+      make panning feel wrong at every zoom except the one it was tuned for. Derive it from the
+      active scale each frame.
+- [ ] Momentum/inertia is optional polish; correctness is just "the cell under the cursor stays
+      under the cursor while dragging."
+
+## 12.4 — Structure display
+
+Highest value, highest risk — deliberately after both renderers exist so markers land on
+either. Cubiomes has the API (`getStructurePos`, `isViableStructurePos`, `getStructureConfig`,
+and `nextStronghold` for strongholds); none of it is exposed by the shim yet, and this is the
+one enhancement that can be *subtly and confidently wrong*, so it gets the full Part 8
+treatment.
+
+- [ ] **Expose a region-scan shim function.** Most structures are placed one candidate per
+      region (region size and salt vary by type — read them from `getStructureConfig`, never
+      hardcode). For each region overlapping the view: `getStructurePos(type, mc, seed, rx, rz,
+      &pos)` for the candidate, then confirm with `isViableStructurePos`. Return the confirmed
+      positions as a flat `[x, z, x, z, …]` buffer, the same pattern as the tile functions.
+- [ ] **Landmine — `getStructurePos` returns a *candidate*, not a placement.** It gives where a
+      structure *would* go; `isViableStructurePos` checks whether the biome/terrain there
+      actually permits it. Skipping the viability check paints phantom structures that aren't in
+      the world — the structure equivalent of the y=0 cave-biome bug: plausible, wrong.
+- [ ] **Strongholds are a separate algorithm — do not fit them into the region loop.** They are
+      placed in rings (3 in the first ring, then 6, 10, …) via `initFirstStronghold` /
+      `nextStronghold`, not per region. Handle them with their own call path.
+- [ ] **Pin and verify per structure type.** Structure placement has changed across versions
+      (salts, region sizes, viability rules). Check each type you expose against Chunkbase for the
+      pinned version — villages/temples/monuments first (moderate), strongholds last (fiddliest).
+      Treat a type as unverified until it matches, exactly as with biomes.
+- [ ] **Render markers in both modes.** 2D: icons/dots on the canvas at the projected position.
+      3D: sprites or billboards at the structure's world position and surface height. Label on
+      hover; show the coordinate.
+- [ ] Start with a small, high-value set (village, stronghold, ocean monument, mansion) rather
+      than all eleven types at once — each additional type is more verification surface.
+
+## 12.5 — WASD / arrow-key flight (3D)
+
+Polish for the now-secondary 3D view. The re-tiling machinery already exists (the mesh loop
+recenters on a point); flight just drives it from the camera continuously instead of on an
+orbit-end event.
+
+- [ ] Swap `OrbitControls` for fly-style controls (Three.js `FlyControls`/`FirstPersonControls`,
+      or a custom WASD + pointer-lock handler). Keep vertical movement (space / shift) since the
+      terrain has real elevation.
+- [ ] **Throttle the re-tiling.** Drive the existing recenter-and-mesh off the camera position,
+      but only when the camera **crosses a tile boundary** (or every N ms), not every frame —
+      otherwise you re-run the tiling loop continuously and stall.
+- [ ] **Landmine — synchronous meshing stutters during fast flight.** Each newly-entered tile
+      runs `gen_heights` + `buildTileMesh` on the main thread; crossing a row of tiles at speed
+      meshes a dozen at once and drops frames. Ship the throttled-synchronous version first (it is
+      fine at moderate speed), and only if it feels janky move tile generation to a **Web Worker**
+      so meshing happens off the main thread. The worker is real work — do not front-load it.
+- [ ] Optional: frustum-bias the tiling so you mesh tiles **ahead** of the camera preferentially,
+      spending the tile budget on what the player is flying toward rather than a symmetric radius.
