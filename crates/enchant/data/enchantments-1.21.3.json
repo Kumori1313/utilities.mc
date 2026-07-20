@@ -11,6 +11,18 @@
       "source_a": "minecraft.wiki 'Enchanting table mechanics' revision 2754638 (2024-11-19), inside the 1.21.3 window",
       "source_b": "NOT YET INDEPENDENTLY CONFIRMED - see caveat",
       "caveat": "Single source lineage. The LIVE wiki lists Copper armor/tools, which do not exist in 1.21.3, so the current page has drifted past our pinned version; the pinned revision agrees with it on every non-copper value. That is a version check, not an independence check. Values are hardcoded in item properties (yarn field: enchantmentValue), not present in any data dump we could reach."
+    },
+    "item_tags": {
+      "source": "misode/mcmeta @ 1.21.3-data, data/minecraft/tags/item/enchantable/*, recursively resolved",
+      "note": "Nested tag references (e.g. sword -> #minecraft:swords) are expanded to concrete item ids."
+    },
+    "item_enchantability": {
+      "derivation": "Material prefix + item-kind suffix mapped onto the enchantability table; specials listed explicitly.",
+      "caveat": "DERIVED, not sourced. Inherits the single-source caveat on the enchantability values themselves, and adds a naming-convention assumption. Any item not matching a known material falls back to 1 ('Other')."
+    },
+    "enchantment_tags": {
+      "source": "misode/mcmeta @ 1.21.3-data, data/minecraft/tags/enchantment/{in_enchanting_table,treasure}.json, recursively resolved",
+      "note": "in_enchanting_table gates what a table can roll: 7 of the 42 (mending, frost_walker, soul_speed, swift_sneak, wind_burst, binding_curse, vanishing_curse) are excluded. Filtering only on item applicability would wrongly roll them."
     }
   },
   "enchantability": {
@@ -72,7 +84,9 @@
       "supported_items": "#minecraft:enchantable/head_armor",
       "slots": [
         "head"
-      ]
+      ],
+      "in_enchanting_table": true,
+      "treasure": false
     },
     "bane_of_arthropods": {
       "weight": 5,
@@ -97,7 +111,9 @@
       "supported_items": "#minecraft:enchantable/weapon",
       "slots": [
         "mainhand"
-      ]
+      ],
+      "in_enchanting_table": true,
+      "treasure": false
     },
     "binding_curse": {
       "weight": 1,
@@ -116,7 +132,9 @@
       "supported_items": "#minecraft:enchantable/equippable",
       "slots": [
         "armor"
-      ]
+      ],
+      "in_enchanting_table": false,
+      "treasure": true
     },
     "blast_protection": {
       "weight": 2,
@@ -139,7 +157,9 @@
       "supported_items": "#minecraft:enchantable/armor",
       "slots": [
         "armor"
-      ]
+      ],
+      "in_enchanting_table": true,
+      "treasure": false
     },
     "breach": {
       "weight": 2,
@@ -164,7 +184,9 @@
       "supported_items": "#minecraft:enchantable/mace",
       "slots": [
         "mainhand"
-      ]
+      ],
+      "in_enchanting_table": true,
+      "treasure": false
     },
     "channeling": {
       "weight": 1,
@@ -185,7 +207,9 @@
       "supported_items": "#minecraft:enchantable/trident",
       "slots": [
         "mainhand"
-      ]
+      ],
+      "in_enchanting_table": true,
+      "treasure": false
     },
     "density": {
       "weight": 5,
@@ -210,7 +234,9 @@
       "supported_items": "#minecraft:enchantable/mace",
       "slots": [
         "mainhand"
-      ]
+      ],
+      "in_enchanting_table": true,
+      "treasure": false
     },
     "depth_strider": {
       "weight": 2,
@@ -231,7 +257,9 @@
       "supported_items": "#minecraft:enchantable/foot_armor",
       "slots": [
         "feet"
-      ]
+      ],
+      "in_enchanting_table": true,
+      "treasure": false
     },
     "efficiency": {
       "weight": 10,
@@ -250,7 +278,9 @@
       "supported_items": "#minecraft:enchantable/mining",
       "slots": [
         "mainhand"
-      ]
+      ],
+      "in_enchanting_table": true,
+      "treasure": false
     },
     "feather_falling": {
       "weight": 5,
@@ -269,7 +299,9 @@
       "supported_items": "#minecraft:enchantable/foot_armor",
       "slots": [
         "armor"
-      ]
+      ],
+      "in_enchanting_table": true,
+      "treasure": false
     },
     "fire_aspect": {
       "weight": 2,
@@ -288,7 +320,9 @@
       "supported_items": "#minecraft:enchantable/fire_aspect",
       "slots": [
         "mainhand"
-      ]
+      ],
+      "in_enchanting_table": true,
+      "treasure": false
     },
     "fire_protection": {
       "weight": 5,
@@ -311,7 +345,9 @@
       "supported_items": "#minecraft:enchantable/armor",
       "slots": [
         "armor"
-      ]
+      ],
+      "in_enchanting_table": true,
+      "treasure": false
     },
     "flame": {
       "weight": 2,
@@ -330,7 +366,9 @@
       "supported_items": "#minecraft:enchantable/bow",
       "slots": [
         "mainhand"
-      ]
+      ],
+      "in_enchanting_table": true,
+      "treasure": false
     },
     "fortune": {
       "weight": 2,
@@ -351,7 +389,9 @@
       "supported_items": "#minecraft:enchantable/mining_loot",
       "slots": [
         "mainhand"
-      ]
+      ],
+      "in_enchanting_table": true,
+      "treasure": false
     },
     "frost_walker": {
       "weight": 2,
@@ -372,7 +412,9 @@
       "supported_items": "#minecraft:enchantable/foot_armor",
       "slots": [
         "feet"
-      ]
+      ],
+      "in_enchanting_table": false,
+      "treasure": true
     },
     "impaling": {
       "weight": 2,
@@ -397,7 +439,9 @@
       "supported_items": "#minecraft:enchantable/trident",
       "slots": [
         "mainhand"
-      ]
+      ],
+      "in_enchanting_table": true,
+      "treasure": false
     },
     "infinity": {
       "weight": 1,
@@ -418,7 +462,9 @@
       "supported_items": "#minecraft:enchantable/bow",
       "slots": [
         "mainhand"
-      ]
+      ],
+      "in_enchanting_table": true,
+      "treasure": false
     },
     "knockback": {
       "weight": 5,
@@ -437,7 +483,9 @@
       "supported_items": "#minecraft:enchantable/sword",
       "slots": [
         "mainhand"
-      ]
+      ],
+      "in_enchanting_table": true,
+      "treasure": false
     },
     "looting": {
       "weight": 2,
@@ -456,7 +504,9 @@
       "supported_items": "#minecraft:enchantable/sword",
       "slots": [
         "mainhand"
-      ]
+      ],
+      "in_enchanting_table": true,
+      "treasure": false
     },
     "loyalty": {
       "weight": 5,
@@ -477,7 +527,9 @@
       "supported_items": "#minecraft:enchantable/trident",
       "slots": [
         "mainhand"
-      ]
+      ],
+      "in_enchanting_table": true,
+      "treasure": false
     },
     "luck_of_the_sea": {
       "weight": 2,
@@ -496,7 +548,9 @@
       "supported_items": "#minecraft:enchantable/fishing",
       "slots": [
         "mainhand"
-      ]
+      ],
+      "in_enchanting_table": true,
+      "treasure": false
     },
     "lure": {
       "weight": 2,
@@ -515,7 +569,9 @@
       "supported_items": "#minecraft:enchantable/fishing",
       "slots": [
         "mainhand"
-      ]
+      ],
+      "in_enchanting_table": true,
+      "treasure": false
     },
     "mending": {
       "weight": 2,
@@ -536,7 +592,9 @@
       "supported_items": "#minecraft:enchantable/durability",
       "slots": [
         "any"
-      ]
+      ],
+      "in_enchanting_table": false,
+      "treasure": true
     },
     "multishot": {
       "weight": 2,
@@ -557,7 +615,9 @@
       "supported_items": "#minecraft:enchantable/crossbow",
       "slots": [
         "mainhand"
-      ]
+      ],
+      "in_enchanting_table": true,
+      "treasure": false
     },
     "piercing": {
       "weight": 10,
@@ -578,7 +638,9 @@
       "supported_items": "#minecraft:enchantable/crossbow",
       "slots": [
         "mainhand"
-      ]
+      ],
+      "in_enchanting_table": true,
+      "treasure": false
     },
     "power": {
       "weight": 10,
@@ -597,7 +659,9 @@
       "supported_items": "#minecraft:enchantable/bow",
       "slots": [
         "mainhand"
-      ]
+      ],
+      "in_enchanting_table": true,
+      "treasure": false
     },
     "projectile_protection": {
       "weight": 5,
@@ -620,7 +684,9 @@
       "supported_items": "#minecraft:enchantable/armor",
       "slots": [
         "armor"
-      ]
+      ],
+      "in_enchanting_table": true,
+      "treasure": false
     },
     "protection": {
       "weight": 10,
@@ -643,7 +709,9 @@
       "supported_items": "#minecraft:enchantable/armor",
       "slots": [
         "armor"
-      ]
+      ],
+      "in_enchanting_table": true,
+      "treasure": false
     },
     "punch": {
       "weight": 2,
@@ -662,7 +730,9 @@
       "supported_items": "#minecraft:enchantable/bow",
       "slots": [
         "mainhand"
-      ]
+      ],
+      "in_enchanting_table": true,
+      "treasure": false
     },
     "quick_charge": {
       "weight": 5,
@@ -682,7 +752,9 @@
       "slots": [
         "mainhand",
         "offhand"
-      ]
+      ],
+      "in_enchanting_table": true,
+      "treasure": false
     },
     "respiration": {
       "weight": 2,
@@ -701,7 +773,9 @@
       "supported_items": "#minecraft:enchantable/head_armor",
       "slots": [
         "head"
-      ]
+      ],
+      "in_enchanting_table": true,
+      "treasure": false
     },
     "riptide": {
       "weight": 2,
@@ -723,7 +797,9 @@
       "supported_items": "#minecraft:enchantable/trident",
       "slots": [
         "hand"
-      ]
+      ],
+      "in_enchanting_table": true,
+      "treasure": false
     },
     "sharpness": {
       "weight": 10,
@@ -748,7 +824,9 @@
       "supported_items": "#minecraft:enchantable/sharp_weapon",
       "slots": [
         "mainhand"
-      ]
+      ],
+      "in_enchanting_table": true,
+      "treasure": false
     },
     "silk_touch": {
       "weight": 1,
@@ -769,7 +847,9 @@
       "supported_items": "#minecraft:enchantable/mining_loot",
       "slots": [
         "mainhand"
-      ]
+      ],
+      "in_enchanting_table": true,
+      "treasure": false
     },
     "smite": {
       "weight": 5,
@@ -794,7 +874,9 @@
       "supported_items": "#minecraft:enchantable/weapon",
       "slots": [
         "mainhand"
-      ]
+      ],
+      "in_enchanting_table": true,
+      "treasure": false
     },
     "soul_speed": {
       "weight": 1,
@@ -813,7 +895,9 @@
       "supported_items": "#minecraft:enchantable/foot_armor",
       "slots": [
         "feet"
-      ]
+      ],
+      "in_enchanting_table": false,
+      "treasure": true
     },
     "sweeping_edge": {
       "weight": 2,
@@ -832,7 +916,9 @@
       "supported_items": "#minecraft:enchantable/sword",
       "slots": [
         "mainhand"
-      ]
+      ],
+      "in_enchanting_table": true,
+      "treasure": false
     },
     "swift_sneak": {
       "weight": 1,
@@ -851,7 +937,9 @@
       "supported_items": "#minecraft:enchantable/leg_armor",
       "slots": [
         "legs"
-      ]
+      ],
+      "in_enchanting_table": false,
+      "treasure": true
     },
     "thorns": {
       "weight": 1,
@@ -870,7 +958,9 @@
       "supported_items": "#minecraft:enchantable/armor",
       "slots": [
         "any"
-      ]
+      ],
+      "in_enchanting_table": true,
+      "treasure": false
     },
     "unbreaking": {
       "weight": 5,
@@ -889,7 +979,9 @@
       "supported_items": "#minecraft:enchantable/durability",
       "slots": [
         "any"
-      ]
+      ],
+      "in_enchanting_table": true,
+      "treasure": false
     },
     "vanishing_curse": {
       "weight": 1,
@@ -908,7 +1000,9 @@
       "supported_items": "#minecraft:enchantable/vanishing",
       "slots": [
         "any"
-      ]
+      ],
+      "in_enchanting_table": false,
+      "treasure": true
     },
     "wind_burst": {
       "weight": 2,
@@ -927,7 +1021,447 @@
       "supported_items": "#minecraft:enchantable/mace",
       "slots": [
         "mainhand"
-      ]
+      ],
+      "in_enchanting_table": false,
+      "treasure": true
     }
+  },
+  "item_tags": {
+    "armor": [
+      "chainmail_boots",
+      "chainmail_chestplate",
+      "chainmail_helmet",
+      "chainmail_leggings",
+      "diamond_boots",
+      "diamond_chestplate",
+      "diamond_helmet",
+      "diamond_leggings",
+      "golden_boots",
+      "golden_chestplate",
+      "golden_helmet",
+      "golden_leggings",
+      "iron_boots",
+      "iron_chestplate",
+      "iron_helmet",
+      "iron_leggings",
+      "leather_boots",
+      "leather_chestplate",
+      "leather_helmet",
+      "leather_leggings",
+      "netherite_boots",
+      "netherite_chestplate",
+      "netherite_helmet",
+      "netherite_leggings",
+      "turtle_helmet"
+    ],
+    "bow": [
+      "bow"
+    ],
+    "chest_armor": [
+      "chainmail_chestplate",
+      "diamond_chestplate",
+      "golden_chestplate",
+      "iron_chestplate",
+      "leather_chestplate",
+      "netherite_chestplate"
+    ],
+    "crossbow": [
+      "crossbow"
+    ],
+    "durability": [
+      "bow",
+      "brush",
+      "carrot_on_a_stick",
+      "chainmail_boots",
+      "chainmail_chestplate",
+      "chainmail_helmet",
+      "chainmail_leggings",
+      "crossbow",
+      "diamond_axe",
+      "diamond_boots",
+      "diamond_chestplate",
+      "diamond_helmet",
+      "diamond_hoe",
+      "diamond_leggings",
+      "diamond_pickaxe",
+      "diamond_shovel",
+      "diamond_sword",
+      "elytra",
+      "fishing_rod",
+      "flint_and_steel",
+      "golden_axe",
+      "golden_boots",
+      "golden_chestplate",
+      "golden_helmet",
+      "golden_hoe",
+      "golden_leggings",
+      "golden_pickaxe",
+      "golden_shovel",
+      "golden_sword",
+      "iron_axe",
+      "iron_boots",
+      "iron_chestplate",
+      "iron_helmet",
+      "iron_hoe",
+      "iron_leggings",
+      "iron_pickaxe",
+      "iron_shovel",
+      "iron_sword",
+      "leather_boots",
+      "leather_chestplate",
+      "leather_helmet",
+      "leather_leggings",
+      "mace",
+      "netherite_axe",
+      "netherite_boots",
+      "netherite_chestplate",
+      "netherite_helmet",
+      "netherite_hoe",
+      "netherite_leggings",
+      "netherite_pickaxe",
+      "netherite_shovel",
+      "netherite_sword",
+      "shears",
+      "shield",
+      "stone_axe",
+      "stone_hoe",
+      "stone_pickaxe",
+      "stone_shovel",
+      "stone_sword",
+      "trident",
+      "turtle_helmet",
+      "warped_fungus_on_a_stick",
+      "wooden_axe",
+      "wooden_hoe",
+      "wooden_pickaxe",
+      "wooden_shovel",
+      "wooden_sword"
+    ],
+    "equippable": [
+      "carved_pumpkin",
+      "chainmail_boots",
+      "chainmail_chestplate",
+      "chainmail_helmet",
+      "chainmail_leggings",
+      "creeper_head",
+      "diamond_boots",
+      "diamond_chestplate",
+      "diamond_helmet",
+      "diamond_leggings",
+      "dragon_head",
+      "elytra",
+      "golden_boots",
+      "golden_chestplate",
+      "golden_helmet",
+      "golden_leggings",
+      "iron_boots",
+      "iron_chestplate",
+      "iron_helmet",
+      "iron_leggings",
+      "leather_boots",
+      "leather_chestplate",
+      "leather_helmet",
+      "leather_leggings",
+      "netherite_boots",
+      "netherite_chestplate",
+      "netherite_helmet",
+      "netherite_leggings",
+      "piglin_head",
+      "player_head",
+      "skeleton_skull",
+      "turtle_helmet",
+      "wither_skeleton_skull",
+      "zombie_head"
+    ],
+    "fire_aspect": [
+      "diamond_sword",
+      "golden_sword",
+      "iron_sword",
+      "mace",
+      "netherite_sword",
+      "stone_sword",
+      "wooden_sword"
+    ],
+    "fishing": [
+      "fishing_rod"
+    ],
+    "foot_armor": [
+      "chainmail_boots",
+      "diamond_boots",
+      "golden_boots",
+      "iron_boots",
+      "leather_boots",
+      "netherite_boots"
+    ],
+    "head_armor": [
+      "chainmail_helmet",
+      "diamond_helmet",
+      "golden_helmet",
+      "iron_helmet",
+      "leather_helmet",
+      "netherite_helmet",
+      "turtle_helmet"
+    ],
+    "leg_armor": [
+      "chainmail_leggings",
+      "diamond_leggings",
+      "golden_leggings",
+      "iron_leggings",
+      "leather_leggings",
+      "netherite_leggings"
+    ],
+    "mace": [
+      "mace"
+    ],
+    "mining": [
+      "diamond_axe",
+      "diamond_hoe",
+      "diamond_pickaxe",
+      "diamond_shovel",
+      "golden_axe",
+      "golden_hoe",
+      "golden_pickaxe",
+      "golden_shovel",
+      "iron_axe",
+      "iron_hoe",
+      "iron_pickaxe",
+      "iron_shovel",
+      "netherite_axe",
+      "netherite_hoe",
+      "netherite_pickaxe",
+      "netherite_shovel",
+      "shears",
+      "stone_axe",
+      "stone_hoe",
+      "stone_pickaxe",
+      "stone_shovel",
+      "wooden_axe",
+      "wooden_hoe",
+      "wooden_pickaxe",
+      "wooden_shovel"
+    ],
+    "mining_loot": [
+      "diamond_axe",
+      "diamond_hoe",
+      "diamond_pickaxe",
+      "diamond_shovel",
+      "golden_axe",
+      "golden_hoe",
+      "golden_pickaxe",
+      "golden_shovel",
+      "iron_axe",
+      "iron_hoe",
+      "iron_pickaxe",
+      "iron_shovel",
+      "netherite_axe",
+      "netherite_hoe",
+      "netherite_pickaxe",
+      "netherite_shovel",
+      "stone_axe",
+      "stone_hoe",
+      "stone_pickaxe",
+      "stone_shovel",
+      "wooden_axe",
+      "wooden_hoe",
+      "wooden_pickaxe",
+      "wooden_shovel"
+    ],
+    "sharp_weapon": [
+      "diamond_axe",
+      "diamond_sword",
+      "golden_axe",
+      "golden_sword",
+      "iron_axe",
+      "iron_sword",
+      "netherite_axe",
+      "netherite_sword",
+      "stone_axe",
+      "stone_sword",
+      "wooden_axe",
+      "wooden_sword"
+    ],
+    "sword": [
+      "diamond_sword",
+      "golden_sword",
+      "iron_sword",
+      "netherite_sword",
+      "stone_sword",
+      "wooden_sword"
+    ],
+    "trident": [
+      "trident"
+    ],
+    "vanishing": [
+      "bow",
+      "brush",
+      "carrot_on_a_stick",
+      "carved_pumpkin",
+      "chainmail_boots",
+      "chainmail_chestplate",
+      "chainmail_helmet",
+      "chainmail_leggings",
+      "compass",
+      "creeper_head",
+      "crossbow",
+      "diamond_axe",
+      "diamond_boots",
+      "diamond_chestplate",
+      "diamond_helmet",
+      "diamond_hoe",
+      "diamond_leggings",
+      "diamond_pickaxe",
+      "diamond_shovel",
+      "diamond_sword",
+      "dragon_head",
+      "elytra",
+      "fishing_rod",
+      "flint_and_steel",
+      "golden_axe",
+      "golden_boots",
+      "golden_chestplate",
+      "golden_helmet",
+      "golden_hoe",
+      "golden_leggings",
+      "golden_pickaxe",
+      "golden_shovel",
+      "golden_sword",
+      "iron_axe",
+      "iron_boots",
+      "iron_chestplate",
+      "iron_helmet",
+      "iron_hoe",
+      "iron_leggings",
+      "iron_pickaxe",
+      "iron_shovel",
+      "iron_sword",
+      "leather_boots",
+      "leather_chestplate",
+      "leather_helmet",
+      "leather_leggings",
+      "mace",
+      "netherite_axe",
+      "netherite_boots",
+      "netherite_chestplate",
+      "netherite_helmet",
+      "netherite_hoe",
+      "netherite_leggings",
+      "netherite_pickaxe",
+      "netherite_shovel",
+      "netherite_sword",
+      "piglin_head",
+      "player_head",
+      "shears",
+      "shield",
+      "skeleton_skull",
+      "stone_axe",
+      "stone_hoe",
+      "stone_pickaxe",
+      "stone_shovel",
+      "stone_sword",
+      "trident",
+      "turtle_helmet",
+      "warped_fungus_on_a_stick",
+      "wither_skeleton_skull",
+      "wooden_axe",
+      "wooden_hoe",
+      "wooden_pickaxe",
+      "wooden_shovel",
+      "wooden_sword",
+      "zombie_head"
+    ],
+    "weapon": [
+      "diamond_axe",
+      "diamond_sword",
+      "golden_axe",
+      "golden_sword",
+      "iron_axe",
+      "iron_sword",
+      "mace",
+      "netherite_axe",
+      "netherite_sword",
+      "stone_axe",
+      "stone_sword",
+      "wooden_axe",
+      "wooden_sword"
+    ]
+  },
+  "item_enchantability": {
+    "book": 1,
+    "bow": 1,
+    "brush": 1,
+    "carrot_on_a_stick": 1,
+    "carved_pumpkin": 1,
+    "chainmail_boots": 12,
+    "chainmail_chestplate": 12,
+    "chainmail_helmet": 12,
+    "chainmail_leggings": 12,
+    "compass": 1,
+    "creeper_head": 1,
+    "crossbow": 1,
+    "diamond_axe": 10,
+    "diamond_boots": 10,
+    "diamond_chestplate": 10,
+    "diamond_helmet": 10,
+    "diamond_hoe": 10,
+    "diamond_leggings": 10,
+    "diamond_pickaxe": 10,
+    "diamond_shovel": 10,
+    "diamond_sword": 10,
+    "dragon_head": 1,
+    "elytra": 1,
+    "fishing_rod": 1,
+    "flint_and_steel": 1,
+    "golden_axe": 22,
+    "golden_boots": 25,
+    "golden_chestplate": 25,
+    "golden_helmet": 25,
+    "golden_hoe": 22,
+    "golden_leggings": 25,
+    "golden_pickaxe": 22,
+    "golden_shovel": 22,
+    "golden_sword": 22,
+    "iron_axe": 14,
+    "iron_boots": 9,
+    "iron_chestplate": 9,
+    "iron_helmet": 9,
+    "iron_hoe": 14,
+    "iron_leggings": 9,
+    "iron_pickaxe": 14,
+    "iron_shovel": 14,
+    "iron_sword": 14,
+    "leather_boots": 15,
+    "leather_chestplate": 15,
+    "leather_helmet": 15,
+    "leather_leggings": 15,
+    "mace": 15,
+    "netherite_axe": 15,
+    "netherite_boots": 15,
+    "netherite_chestplate": 15,
+    "netherite_helmet": 15,
+    "netherite_hoe": 15,
+    "netherite_leggings": 15,
+    "netherite_pickaxe": 15,
+    "netherite_shovel": 15,
+    "netherite_sword": 15,
+    "piglin_head": 1,
+    "player_head": 1,
+    "shears": 1,
+    "shield": 1,
+    "skeleton_skull": 1,
+    "stone_axe": 5,
+    "stone_hoe": 5,
+    "stone_pickaxe": 5,
+    "stone_shovel": 5,
+    "stone_sword": 5,
+    "trident": 1,
+    "turtle_helmet": 9,
+    "warped_fungus_on_a_stick": 1,
+    "wither_skeleton_skull": 1,
+    "wooden_axe": 15,
+    "wooden_hoe": 15,
+    "wooden_pickaxe": 15,
+    "wooden_shovel": 15,
+    "wooden_sword": 15,
+    "zombie_head": 1
   }
 }
