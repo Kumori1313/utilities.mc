@@ -1,0 +1,933 @@
+{
+  "_provenance": {
+    "minecraft_version": "1.21.3",
+    "enchantments": {
+      "source_a": "misode/mcmeta @ 1.21.3-data (dump of the game's own data files; 1.21+ enchantments are datapack-defined)",
+      "source_b": "PrismarineJS/minecraft-data @ pc/1.21.1 (community dataset; 1.21.3 aliases to it)",
+      "agreement": "210 field comparisons (weight, max_level, min_cost, max_cost, exclusive sets) across 42 enchantments, 0 disagreements",
+      "note": "mcmeta declares exclusivity one-directionally; vanilla areCompatible() tests both sides, so exclusive_with here is the SYMMETRIC CLOSURE. A one-directional check against raw mcmeta data would wrongly allow e.g. channeling+riptide together."
+    },
+    "enchantability": {
+      "source_a": "minecraft.wiki 'Enchanting table mechanics' revision 2754638 (2024-11-19), inside the 1.21.3 window",
+      "source_b": "NOT YET INDEPENDENTLY CONFIRMED - see caveat",
+      "caveat": "Single source lineage. The LIVE wiki lists Copper armor/tools, which do not exist in 1.21.3, so the current page has drifted past our pinned version; the pinned revision agrees with it on every non-copper value. That is a version check, not an independence check. Values are hardcoded in item properties (yarn field: enchantmentValue), not present in any data dump we could reach."
+    }
+  },
+  "enchantability": {
+    "_comment": "armor / tool values per material; 'other' covers book, bow, crossbow, trident, fishing rod",
+    "wood": {
+      "tool": 15
+    },
+    "leather": {
+      "armor": 15
+    },
+    "stone": {
+      "tool": 5
+    },
+    "chain": {
+      "armor": 12
+    },
+    "iron": {
+      "armor": 9,
+      "tool": 14
+    },
+    "gold": {
+      "armor": 25,
+      "tool": 22
+    },
+    "diamond": {
+      "armor": 10,
+      "tool": 10
+    },
+    "turtle": {
+      "armor": 9
+    },
+    "netherite": {
+      "armor": 15,
+      "tool": 15
+    },
+    "mace": {
+      "tool": 15
+    },
+    "other": {
+      "armor": 1,
+      "tool": 1
+    }
+  },
+  "enchantments": {
+    "aqua_affinity": {
+      "weight": 2,
+      "max_level": 1,
+      "min_cost": {
+        "base": 1,
+        "per_level": 0
+      },
+      "max_cost": {
+        "base": 41,
+        "per_level": 0
+      },
+      "anvil_cost": 4,
+      "exclusive_with": [],
+      "primary_items": null,
+      "supported_items": "#minecraft:enchantable/head_armor",
+      "slots": [
+        "head"
+      ]
+    },
+    "bane_of_arthropods": {
+      "weight": 5,
+      "max_level": 5,
+      "min_cost": {
+        "base": 5,
+        "per_level": 8
+      },
+      "max_cost": {
+        "base": 25,
+        "per_level": 8
+      },
+      "anvil_cost": 2,
+      "exclusive_with": [
+        "breach",
+        "density",
+        "impaling",
+        "sharpness",
+        "smite"
+      ],
+      "primary_items": "#minecraft:enchantable/sword",
+      "supported_items": "#minecraft:enchantable/weapon",
+      "slots": [
+        "mainhand"
+      ]
+    },
+    "binding_curse": {
+      "weight": 1,
+      "max_level": 1,
+      "min_cost": {
+        "base": 25,
+        "per_level": 0
+      },
+      "max_cost": {
+        "base": 50,
+        "per_level": 0
+      },
+      "anvil_cost": 8,
+      "exclusive_with": [],
+      "primary_items": null,
+      "supported_items": "#minecraft:enchantable/equippable",
+      "slots": [
+        "armor"
+      ]
+    },
+    "blast_protection": {
+      "weight": 2,
+      "max_level": 4,
+      "min_cost": {
+        "base": 5,
+        "per_level": 8
+      },
+      "max_cost": {
+        "base": 13,
+        "per_level": 8
+      },
+      "anvil_cost": 4,
+      "exclusive_with": [
+        "fire_protection",
+        "projectile_protection",
+        "protection"
+      ],
+      "primary_items": null,
+      "supported_items": "#minecraft:enchantable/armor",
+      "slots": [
+        "armor"
+      ]
+    },
+    "breach": {
+      "weight": 2,
+      "max_level": 4,
+      "min_cost": {
+        "base": 15,
+        "per_level": 9
+      },
+      "max_cost": {
+        "base": 65,
+        "per_level": 9
+      },
+      "anvil_cost": 4,
+      "exclusive_with": [
+        "bane_of_arthropods",
+        "density",
+        "impaling",
+        "sharpness",
+        "smite"
+      ],
+      "primary_items": null,
+      "supported_items": "#minecraft:enchantable/mace",
+      "slots": [
+        "mainhand"
+      ]
+    },
+    "channeling": {
+      "weight": 1,
+      "max_level": 1,
+      "min_cost": {
+        "base": 25,
+        "per_level": 0
+      },
+      "max_cost": {
+        "base": 50,
+        "per_level": 0
+      },
+      "anvil_cost": 8,
+      "exclusive_with": [
+        "riptide"
+      ],
+      "primary_items": null,
+      "supported_items": "#minecraft:enchantable/trident",
+      "slots": [
+        "mainhand"
+      ]
+    },
+    "density": {
+      "weight": 5,
+      "max_level": 5,
+      "min_cost": {
+        "base": 5,
+        "per_level": 8
+      },
+      "max_cost": {
+        "base": 25,
+        "per_level": 8
+      },
+      "anvil_cost": 2,
+      "exclusive_with": [
+        "bane_of_arthropods",
+        "breach",
+        "impaling",
+        "sharpness",
+        "smite"
+      ],
+      "primary_items": null,
+      "supported_items": "#minecraft:enchantable/mace",
+      "slots": [
+        "mainhand"
+      ]
+    },
+    "depth_strider": {
+      "weight": 2,
+      "max_level": 3,
+      "min_cost": {
+        "base": 10,
+        "per_level": 10
+      },
+      "max_cost": {
+        "base": 25,
+        "per_level": 10
+      },
+      "anvil_cost": 4,
+      "exclusive_with": [
+        "frost_walker"
+      ],
+      "primary_items": null,
+      "supported_items": "#minecraft:enchantable/foot_armor",
+      "slots": [
+        "feet"
+      ]
+    },
+    "efficiency": {
+      "weight": 10,
+      "max_level": 5,
+      "min_cost": {
+        "base": 1,
+        "per_level": 10
+      },
+      "max_cost": {
+        "base": 51,
+        "per_level": 10
+      },
+      "anvil_cost": 1,
+      "exclusive_with": [],
+      "primary_items": null,
+      "supported_items": "#minecraft:enchantable/mining",
+      "slots": [
+        "mainhand"
+      ]
+    },
+    "feather_falling": {
+      "weight": 5,
+      "max_level": 4,
+      "min_cost": {
+        "base": 5,
+        "per_level": 6
+      },
+      "max_cost": {
+        "base": 11,
+        "per_level": 6
+      },
+      "anvil_cost": 2,
+      "exclusive_with": [],
+      "primary_items": null,
+      "supported_items": "#minecraft:enchantable/foot_armor",
+      "slots": [
+        "armor"
+      ]
+    },
+    "fire_aspect": {
+      "weight": 2,
+      "max_level": 2,
+      "min_cost": {
+        "base": 10,
+        "per_level": 20
+      },
+      "max_cost": {
+        "base": 60,
+        "per_level": 20
+      },
+      "anvil_cost": 4,
+      "exclusive_with": [],
+      "primary_items": "#minecraft:enchantable/sword",
+      "supported_items": "#minecraft:enchantable/fire_aspect",
+      "slots": [
+        "mainhand"
+      ]
+    },
+    "fire_protection": {
+      "weight": 5,
+      "max_level": 4,
+      "min_cost": {
+        "base": 10,
+        "per_level": 8
+      },
+      "max_cost": {
+        "base": 18,
+        "per_level": 8
+      },
+      "anvil_cost": 2,
+      "exclusive_with": [
+        "blast_protection",
+        "projectile_protection",
+        "protection"
+      ],
+      "primary_items": null,
+      "supported_items": "#minecraft:enchantable/armor",
+      "slots": [
+        "armor"
+      ]
+    },
+    "flame": {
+      "weight": 2,
+      "max_level": 1,
+      "min_cost": {
+        "base": 20,
+        "per_level": 0
+      },
+      "max_cost": {
+        "base": 50,
+        "per_level": 0
+      },
+      "anvil_cost": 4,
+      "exclusive_with": [],
+      "primary_items": null,
+      "supported_items": "#minecraft:enchantable/bow",
+      "slots": [
+        "mainhand"
+      ]
+    },
+    "fortune": {
+      "weight": 2,
+      "max_level": 3,
+      "min_cost": {
+        "base": 15,
+        "per_level": 9
+      },
+      "max_cost": {
+        "base": 65,
+        "per_level": 9
+      },
+      "anvil_cost": 4,
+      "exclusive_with": [
+        "silk_touch"
+      ],
+      "primary_items": null,
+      "supported_items": "#minecraft:enchantable/mining_loot",
+      "slots": [
+        "mainhand"
+      ]
+    },
+    "frost_walker": {
+      "weight": 2,
+      "max_level": 2,
+      "min_cost": {
+        "base": 10,
+        "per_level": 10
+      },
+      "max_cost": {
+        "base": 25,
+        "per_level": 10
+      },
+      "anvil_cost": 4,
+      "exclusive_with": [
+        "depth_strider"
+      ],
+      "primary_items": null,
+      "supported_items": "#minecraft:enchantable/foot_armor",
+      "slots": [
+        "feet"
+      ]
+    },
+    "impaling": {
+      "weight": 2,
+      "max_level": 5,
+      "min_cost": {
+        "base": 1,
+        "per_level": 8
+      },
+      "max_cost": {
+        "base": 21,
+        "per_level": 8
+      },
+      "anvil_cost": 4,
+      "exclusive_with": [
+        "bane_of_arthropods",
+        "breach",
+        "density",
+        "sharpness",
+        "smite"
+      ],
+      "primary_items": null,
+      "supported_items": "#minecraft:enchantable/trident",
+      "slots": [
+        "mainhand"
+      ]
+    },
+    "infinity": {
+      "weight": 1,
+      "max_level": 1,
+      "min_cost": {
+        "base": 20,
+        "per_level": 0
+      },
+      "max_cost": {
+        "base": 50,
+        "per_level": 0
+      },
+      "anvil_cost": 8,
+      "exclusive_with": [
+        "mending"
+      ],
+      "primary_items": null,
+      "supported_items": "#minecraft:enchantable/bow",
+      "slots": [
+        "mainhand"
+      ]
+    },
+    "knockback": {
+      "weight": 5,
+      "max_level": 2,
+      "min_cost": {
+        "base": 5,
+        "per_level": 20
+      },
+      "max_cost": {
+        "base": 55,
+        "per_level": 20
+      },
+      "anvil_cost": 2,
+      "exclusive_with": [],
+      "primary_items": null,
+      "supported_items": "#minecraft:enchantable/sword",
+      "slots": [
+        "mainhand"
+      ]
+    },
+    "looting": {
+      "weight": 2,
+      "max_level": 3,
+      "min_cost": {
+        "base": 15,
+        "per_level": 9
+      },
+      "max_cost": {
+        "base": 65,
+        "per_level": 9
+      },
+      "anvil_cost": 4,
+      "exclusive_with": [],
+      "primary_items": null,
+      "supported_items": "#minecraft:enchantable/sword",
+      "slots": [
+        "mainhand"
+      ]
+    },
+    "loyalty": {
+      "weight": 5,
+      "max_level": 3,
+      "min_cost": {
+        "base": 12,
+        "per_level": 7
+      },
+      "max_cost": {
+        "base": 50,
+        "per_level": 0
+      },
+      "anvil_cost": 2,
+      "exclusive_with": [
+        "riptide"
+      ],
+      "primary_items": null,
+      "supported_items": "#minecraft:enchantable/trident",
+      "slots": [
+        "mainhand"
+      ]
+    },
+    "luck_of_the_sea": {
+      "weight": 2,
+      "max_level": 3,
+      "min_cost": {
+        "base": 15,
+        "per_level": 9
+      },
+      "max_cost": {
+        "base": 65,
+        "per_level": 9
+      },
+      "anvil_cost": 4,
+      "exclusive_with": [],
+      "primary_items": null,
+      "supported_items": "#minecraft:enchantable/fishing",
+      "slots": [
+        "mainhand"
+      ]
+    },
+    "lure": {
+      "weight": 2,
+      "max_level": 3,
+      "min_cost": {
+        "base": 15,
+        "per_level": 9
+      },
+      "max_cost": {
+        "base": 65,
+        "per_level": 9
+      },
+      "anvil_cost": 4,
+      "exclusive_with": [],
+      "primary_items": null,
+      "supported_items": "#minecraft:enchantable/fishing",
+      "slots": [
+        "mainhand"
+      ]
+    },
+    "mending": {
+      "weight": 2,
+      "max_level": 1,
+      "min_cost": {
+        "base": 25,
+        "per_level": 25
+      },
+      "max_cost": {
+        "base": 75,
+        "per_level": 25
+      },
+      "anvil_cost": 4,
+      "exclusive_with": [
+        "infinity"
+      ],
+      "primary_items": null,
+      "supported_items": "#minecraft:enchantable/durability",
+      "slots": [
+        "any"
+      ]
+    },
+    "multishot": {
+      "weight": 2,
+      "max_level": 1,
+      "min_cost": {
+        "base": 20,
+        "per_level": 0
+      },
+      "max_cost": {
+        "base": 50,
+        "per_level": 0
+      },
+      "anvil_cost": 4,
+      "exclusive_with": [
+        "piercing"
+      ],
+      "primary_items": null,
+      "supported_items": "#minecraft:enchantable/crossbow",
+      "slots": [
+        "mainhand"
+      ]
+    },
+    "piercing": {
+      "weight": 10,
+      "max_level": 4,
+      "min_cost": {
+        "base": 1,
+        "per_level": 10
+      },
+      "max_cost": {
+        "base": 50,
+        "per_level": 0
+      },
+      "anvil_cost": 1,
+      "exclusive_with": [
+        "multishot"
+      ],
+      "primary_items": null,
+      "supported_items": "#minecraft:enchantable/crossbow",
+      "slots": [
+        "mainhand"
+      ]
+    },
+    "power": {
+      "weight": 10,
+      "max_level": 5,
+      "min_cost": {
+        "base": 1,
+        "per_level": 10
+      },
+      "max_cost": {
+        "base": 16,
+        "per_level": 10
+      },
+      "anvil_cost": 1,
+      "exclusive_with": [],
+      "primary_items": null,
+      "supported_items": "#minecraft:enchantable/bow",
+      "slots": [
+        "mainhand"
+      ]
+    },
+    "projectile_protection": {
+      "weight": 5,
+      "max_level": 4,
+      "min_cost": {
+        "base": 3,
+        "per_level": 6
+      },
+      "max_cost": {
+        "base": 9,
+        "per_level": 6
+      },
+      "anvil_cost": 2,
+      "exclusive_with": [
+        "blast_protection",
+        "fire_protection",
+        "protection"
+      ],
+      "primary_items": null,
+      "supported_items": "#minecraft:enchantable/armor",
+      "slots": [
+        "armor"
+      ]
+    },
+    "protection": {
+      "weight": 10,
+      "max_level": 4,
+      "min_cost": {
+        "base": 1,
+        "per_level": 11
+      },
+      "max_cost": {
+        "base": 12,
+        "per_level": 11
+      },
+      "anvil_cost": 1,
+      "exclusive_with": [
+        "blast_protection",
+        "fire_protection",
+        "projectile_protection"
+      ],
+      "primary_items": null,
+      "supported_items": "#minecraft:enchantable/armor",
+      "slots": [
+        "armor"
+      ]
+    },
+    "punch": {
+      "weight": 2,
+      "max_level": 2,
+      "min_cost": {
+        "base": 12,
+        "per_level": 20
+      },
+      "max_cost": {
+        "base": 37,
+        "per_level": 20
+      },
+      "anvil_cost": 4,
+      "exclusive_with": [],
+      "primary_items": null,
+      "supported_items": "#minecraft:enchantable/bow",
+      "slots": [
+        "mainhand"
+      ]
+    },
+    "quick_charge": {
+      "weight": 5,
+      "max_level": 3,
+      "min_cost": {
+        "base": 12,
+        "per_level": 20
+      },
+      "max_cost": {
+        "base": 50,
+        "per_level": 0
+      },
+      "anvil_cost": 2,
+      "exclusive_with": [],
+      "primary_items": null,
+      "supported_items": "#minecraft:enchantable/crossbow",
+      "slots": [
+        "mainhand",
+        "offhand"
+      ]
+    },
+    "respiration": {
+      "weight": 2,
+      "max_level": 3,
+      "min_cost": {
+        "base": 10,
+        "per_level": 10
+      },
+      "max_cost": {
+        "base": 40,
+        "per_level": 10
+      },
+      "anvil_cost": 4,
+      "exclusive_with": [],
+      "primary_items": null,
+      "supported_items": "#minecraft:enchantable/head_armor",
+      "slots": [
+        "head"
+      ]
+    },
+    "riptide": {
+      "weight": 2,
+      "max_level": 3,
+      "min_cost": {
+        "base": 17,
+        "per_level": 7
+      },
+      "max_cost": {
+        "base": 50,
+        "per_level": 0
+      },
+      "anvil_cost": 4,
+      "exclusive_with": [
+        "channeling",
+        "loyalty"
+      ],
+      "primary_items": null,
+      "supported_items": "#minecraft:enchantable/trident",
+      "slots": [
+        "hand"
+      ]
+    },
+    "sharpness": {
+      "weight": 10,
+      "max_level": 5,
+      "min_cost": {
+        "base": 1,
+        "per_level": 11
+      },
+      "max_cost": {
+        "base": 21,
+        "per_level": 11
+      },
+      "anvil_cost": 1,
+      "exclusive_with": [
+        "bane_of_arthropods",
+        "breach",
+        "density",
+        "impaling",
+        "smite"
+      ],
+      "primary_items": "#minecraft:enchantable/sword",
+      "supported_items": "#minecraft:enchantable/sharp_weapon",
+      "slots": [
+        "mainhand"
+      ]
+    },
+    "silk_touch": {
+      "weight": 1,
+      "max_level": 1,
+      "min_cost": {
+        "base": 15,
+        "per_level": 0
+      },
+      "max_cost": {
+        "base": 65,
+        "per_level": 0
+      },
+      "anvil_cost": 8,
+      "exclusive_with": [
+        "fortune"
+      ],
+      "primary_items": null,
+      "supported_items": "#minecraft:enchantable/mining_loot",
+      "slots": [
+        "mainhand"
+      ]
+    },
+    "smite": {
+      "weight": 5,
+      "max_level": 5,
+      "min_cost": {
+        "base": 5,
+        "per_level": 8
+      },
+      "max_cost": {
+        "base": 25,
+        "per_level": 8
+      },
+      "anvil_cost": 2,
+      "exclusive_with": [
+        "bane_of_arthropods",
+        "breach",
+        "density",
+        "impaling",
+        "sharpness"
+      ],
+      "primary_items": "#minecraft:enchantable/sword",
+      "supported_items": "#minecraft:enchantable/weapon",
+      "slots": [
+        "mainhand"
+      ]
+    },
+    "soul_speed": {
+      "weight": 1,
+      "max_level": 3,
+      "min_cost": {
+        "base": 10,
+        "per_level": 10
+      },
+      "max_cost": {
+        "base": 25,
+        "per_level": 10
+      },
+      "anvil_cost": 8,
+      "exclusive_with": [],
+      "primary_items": null,
+      "supported_items": "#minecraft:enchantable/foot_armor",
+      "slots": [
+        "feet"
+      ]
+    },
+    "sweeping_edge": {
+      "weight": 2,
+      "max_level": 3,
+      "min_cost": {
+        "base": 5,
+        "per_level": 9
+      },
+      "max_cost": {
+        "base": 20,
+        "per_level": 9
+      },
+      "anvil_cost": 4,
+      "exclusive_with": [],
+      "primary_items": null,
+      "supported_items": "#minecraft:enchantable/sword",
+      "slots": [
+        "mainhand"
+      ]
+    },
+    "swift_sneak": {
+      "weight": 1,
+      "max_level": 3,
+      "min_cost": {
+        "base": 25,
+        "per_level": 25
+      },
+      "max_cost": {
+        "base": 75,
+        "per_level": 25
+      },
+      "anvil_cost": 8,
+      "exclusive_with": [],
+      "primary_items": null,
+      "supported_items": "#minecraft:enchantable/leg_armor",
+      "slots": [
+        "legs"
+      ]
+    },
+    "thorns": {
+      "weight": 1,
+      "max_level": 3,
+      "min_cost": {
+        "base": 10,
+        "per_level": 20
+      },
+      "max_cost": {
+        "base": 60,
+        "per_level": 20
+      },
+      "anvil_cost": 8,
+      "exclusive_with": [],
+      "primary_items": "#minecraft:enchantable/chest_armor",
+      "supported_items": "#minecraft:enchantable/armor",
+      "slots": [
+        "any"
+      ]
+    },
+    "unbreaking": {
+      "weight": 5,
+      "max_level": 3,
+      "min_cost": {
+        "base": 5,
+        "per_level": 8
+      },
+      "max_cost": {
+        "base": 55,
+        "per_level": 8
+      },
+      "anvil_cost": 2,
+      "exclusive_with": [],
+      "primary_items": null,
+      "supported_items": "#minecraft:enchantable/durability",
+      "slots": [
+        "any"
+      ]
+    },
+    "vanishing_curse": {
+      "weight": 1,
+      "max_level": 1,
+      "min_cost": {
+        "base": 25,
+        "per_level": 0
+      },
+      "max_cost": {
+        "base": 50,
+        "per_level": 0
+      },
+      "anvil_cost": 8,
+      "exclusive_with": [],
+      "primary_items": null,
+      "supported_items": "#minecraft:enchantable/vanishing",
+      "slots": [
+        "any"
+      ]
+    },
+    "wind_burst": {
+      "weight": 2,
+      "max_level": 3,
+      "min_cost": {
+        "base": 15,
+        "per_level": 9
+      },
+      "max_cost": {
+        "base": 65,
+        "per_level": 9
+      },
+      "anvil_cost": 4,
+      "exclusive_with": [],
+      "primary_items": null,
+      "supported_items": "#minecraft:enchantable/mace",
+      "slots": [
+        "mainhand"
+      ]
+    }
+  }
+}

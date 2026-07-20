@@ -1,0 +1,9 @@
+[package]
+name = "enchant"
+version = "0.1.0"
+edition = "2024"
+
+# Per Part 10.0: pure Rust, no C, no wasm-specific code in the core. The wasm-bindgen
+# surface arrives in 10.5 as a thin wrapper module so that `cargo test` on the core
+# never requires a browser.
+[dependencies]
