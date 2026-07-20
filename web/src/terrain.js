@@ -11,11 +11,18 @@ import * as THREE from 'three';
 /// 1:1 against a 256-block-wide tile the terrain reads as almost flat.
 export const Y_SCALE = 1.6;
 
-/// Build a mesh for one tile. `n` is cells per edge, `scale` blocks per cell.
+/// Overworld sea level. Cubiomes reports TERRAIN height, which for an ocean is the
+/// seafloor — so rendering it directly makes oceans slope away into a pit, when in game
+/// the water surface is flat at this height regardless of depth. Rendering clamps up to
+/// sea level; the cache keeps the true seafloor height, so `height_at` is unaffected.
+export const SEA_LEVEL = 63;
+
+/// Build a mesh for one tile. `n` is the stored grid width (owned cells + skirt), `scale`
+/// blocks per cell.
 ///
-/// Vertices sit at cell centres, so a tile of n cells produces an (n-1)x(n-1) quad grid.
-/// Neighbouring tiles therefore leave a one-cell seam; that is a known limitation, noted
-/// rather than hidden — closing it needs an overlapping fetch of n+1 cells per tile.
+/// Vertices sit at cell centres, so an n-wide grid yields (n-1)x(n-1) quads. With the
+/// one-cell skirt that is exactly TILE_CELLS quads, so a tile spans its full width and
+/// meets its neighbour flush — no seam.
 export function buildTileMesh(biomes, heights, n, scale, originX, originZ, palette) {
   const positions = new Float32Array(n * n * 3);
   const colors = new Float32Array(n * n * 3);
@@ -26,8 +33,9 @@ export function buildTileMesh(biomes, heights, n, scale, originX, originZ, palet
       const h = heights[k];
       positions[k * 3] = originX + i * scale;
       // NaN would poison the whole geometry's bounding sphere and silently blank the
-      // mesh, so guard rather than trust the buffer.
-      positions[k * 3 + 1] = Number.isFinite(h) ? h * Y_SCALE : 0;
+      // mesh, so guard rather than trust the buffer. Clamp to sea level so oceans render
+      // as a flat water surface rather than a sloping seafloor.
+      positions[k * 3 + 1] = Number.isFinite(h) ? Math.max(h, SEA_LEVEL) * Y_SCALE : SEA_LEVEL * Y_SCALE;
       positions[k * 3 + 2] = originZ + j * scale;
 
       const id = biomes[k];

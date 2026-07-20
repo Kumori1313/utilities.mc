@@ -73,6 +73,14 @@ int biome_colors(unsigned char *out) {
 
 // Approximate Overworld surface height, with the biome at that surface.
 //
+// The height is an APPROXIMATION (np[NP_DEPTH]/76.0) — the exact surface needs the full
+// density/aquifer simulation Cubiomes does not do cheaply. Measured against Chunkbase it
+// lands within ~5 blocks, mixed sign; good enough to shape terrain and pick the surface
+// biome, but not an exact y. The resampled id below inherits that: if the approximate
+// height crosses a vertical biome band it could pick a neighbour. Verified correct on the
+// delicate cases (e.g. a snowy_taiga/snowy_beach coast matched Chunkbase), but it is a
+// dependency, not a guarantee.
+//
 // Fixed 1:4 horizontal scale — x/z/w/h are BIOME coordinates, not blocks. Unlike
 // gen_biomes there is no scale parameter, because Cubiomes' mapApproxHeight offers none.
 //

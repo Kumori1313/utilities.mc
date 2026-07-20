@@ -65,7 +65,9 @@ export function parseSeed(text) {
 /// Returns false if the engine refused (e.g. a non-Overworld dimension, where Cubiomes has
 /// no height model) so the caller can report that rather than mesh an empty buffer.
 export function fetchTile(engine, view, tx, tz) {
-  const n = view.tile_cells;
+  // Request the STRIDE, not the owned cell count: the extra row/column is the skirt that
+  // lets this tile's mesh reach its neighbour's edge instead of stopping one cell short.
+  const n = view.tile_stride;
   const [ox, oz] = view.tile_origin_block(tx, tz, SCALE);
   const cells = n * n;
 

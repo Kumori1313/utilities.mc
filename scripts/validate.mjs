@@ -73,7 +73,7 @@ for (const seed of SEEDS) {
 
   const view = new app.View(64);
   view.set_world(s, mc, 0);
-  const n = view.tile_cells, cells = n * n;
+  const n = view.tile_stride, cells = n * n;
 
   // Generate a tile and require every route to the same surface biome to agree.
   const [ox, oz] = view.tile_origin_block(0, 0, SCALE);
@@ -136,7 +136,7 @@ console.log('\n=== guards ===');
   // Stale-world guard: a cache pointed at a new seed must not serve old tiles.
   const view = new app.View(8);
   view.set_world(s, mc, 0);
-  const n = view.tile_cells;
+  const n = view.tile_stride;
   const yP = M._malloc(n * n * 4), iP = M._malloc(n * n * 4);
   eng.genH(0, 0, n, n, yP, iP);
   view.store_tile(0, 0, SCALE, M.HEAP32.subarray(iP >> 2, (iP >> 2) + n * n),
@@ -188,7 +188,7 @@ if (process.argv.includes('--pan')) {
   const CAP = 64;
   const view = new app.View(CAP);
   view.set_world(s, mc, 0);
-  const n = view.tile_cells;
+  const n = view.tile_stride;
   const yP = M._malloc(n * n * 4), iP = M._malloc(n * n * 4);
 
   const heapAt = () => M.HEAPU8.length;
@@ -221,17 +221,43 @@ if (process.argv.includes('--pan')) {
 console.log(`\n=== ground truth: CHECK THESE AGAINST CHUNKBASE (Java ${MC_VERSION}) ===`);
 console.log('  This script cannot verify these — self-consistency is not correctness.');
 console.log('  A wrong dimension or version would agree with itself perfectly.\n');
-console.log('    seed                  x      z    y   biome');
+console.log('    seed                  x      z surfY   biome');
+// Negative seeds are deliberately over-represented. The original table had exactly one
+// (the 19-digit outlier below), it was the only entry that disagreed with Chunkbase, and
+// there was nothing to tell a sign-handling bug apart from a mistyped seed. Small negative
+// seeds are easy to enter correctly, so they isolate the two.
 const CHECKS = [
   [1n, 100, 100], [1n, 0, 0], [1n, -500, 700], [1n, 2000, -2000],
   [42n, 0, 0], [42n, 300, -300],
+  [-1n, 0, 0], [-1n, 500, 500],
+  [-42n, 0, 0], [-42n, 500, 500],
+  [-12345n, 0, 0], [-12345n, 500, 500],
+  [-999999n, 0, 0],
+  // Beyond 2^53, so it cannot survive a JS Number. Ours is computed with BigInt end to
+  // end; a tool that parses seeds as Number would disagree here and nowhere else.
   [-4172144997902289642n, 0, 0], [-4172144997902289642n, 1000, 1000],
+  // Precision discriminator. 2^53 is the largest integer a double holds exactly and
+  // 2^53+1 is the smallest it cannot — Number() maps both to 2^53. Our engine gives
+  // completely different biomes for them, so any tool reporting the SAME biome for both
+  // is quantising seeds through a double and cannot be trusted past 2^53.
+  [9007199254740992n, 0, 0], [9007199254740992n, 500, 500],
+  [9007199254740993n, 0, 0], [9007199254740993n, 500, 500],
+  [1234567890123456789n, 0, 0], [-1234567890123456789n, 0, 0],
 ];
+// Sample at each point's SURFACE, not a fixed y. Chunkbase shows the surface biome, and
+// biomes are three-dimensional since 1.18, so a fixed y=64 query silently compares a
+// different thing wherever terrain is not at sea level. That is the same mistake
+// gen_heights made by reporting y=0 ids; it survived here because most surfaces sit near
+// y=64, so most rows agreed by luck.
+const surfYPtr = M._malloc(4), surfIdPtr = M._malloc(4);
 for (const [seed, x, z] of CHECKS) {
   eng.setWorld(BigInt.asUintN(64, seed), mc, 0);
-  const id = eng.at(1, x, 64, z); // scale 1 = block coords, what Chunkbase shows
-  console.log(`  ${String(seed).padStart(20)} ${String(x).padStart(6)} ${String(z).padStart(6)}   64   ${eng.b2s(mc, id)}`);
+  eng.genH(Math.floor(x / SCALE), Math.floor(z / SCALE), 1, 1, surfYPtr, surfIdPtr);
+  const h = M.HEAPF32[surfYPtr >> 2];
+  const id = M.HEAP32[surfIdPtr >> 2];
+  console.log(`  ${String(seed).padStart(20)} ${String(x).padStart(6)} ${String(z).padStart(6)} ${h.toFixed(0).padStart(5)}   ${eng.b2s(mc, id)}`);
 }
+M._free(surfYPtr); M._free(surfIdPtr);
 
 console.log(`\n${failures ? `${failures} FAILURE(S)` : 'all automated checks passed'}`);
 process.exit(failures ? 1 : 0);

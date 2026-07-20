@@ -2,7 +2,7 @@
 //! `wasm_bindgen`.
 
 use app::tiles::{
-    TILE_CELLS, TileKey, block_to_cell, cell_to_tile, index_in_tile, tile_for_block,
+    TILE_CELLS, TILE_STRIDE, TileKey, block_to_cell, cell_to_tile, index_in_tile, tile_for_block,
     tiles_for_viewport,
 };
 
@@ -66,7 +66,7 @@ fn tile_indices_are_a_bijection() {
             let key = TileKey { tx, tz, scale };
             let (ox, oz) = key.origin_block();
             let span = key.span_blocks();
-            let mut seen = vec![false; (TILE_CELLS * TILE_CELLS) as usize];
+            let mut seen = vec![false; (TILE_STRIDE * TILE_STRIDE) as usize];
 
             for bz in (oz..oz + span).step_by(scale as usize) {
                 for bx in (ox..ox + span).step_by(scale as usize) {
@@ -77,9 +77,14 @@ fn tile_indices_are_a_bijection() {
                     assert_eq!(tile_for_block(bx, bz, scale), key, "tile disagreement");
                 }
             }
-            assert!(
-                seen.iter().all(|&s| s),
-                "some indices unreachable in {key:?}"
+            // Owned cells must all be reachable. The skirt row/column is deliberately
+            // not addressable by lookup — it exists only so meshing reaches the
+            // neighbour's edge — so it stays unseen here.
+            let reached = seen.iter().filter(|&&s| s).count();
+            assert_eq!(
+                reached,
+                (TILE_CELLS * TILE_CELLS) as usize,
+                "expected every owned cell reachable in {key:?}"
             );
         }
     }

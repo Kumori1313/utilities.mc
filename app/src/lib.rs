@@ -33,7 +33,7 @@ pub mod cache;
 pub mod tiles;
 
 use cache::{Tile, TileCache, World};
-use tiles::{TILE_CELLS, TileKey, index_in_tile, tiles_for_viewport};
+use tiles::{TILE_CELLS, TILE_STRIDE, TileKey, index_in_tile, tiles_for_viewport};
 use wasm_bindgen::prelude::*;
 
 /// Cubiomes' "no biome" sentinel, returned for uncached lookups.
@@ -97,7 +97,8 @@ impl View {
             .collect()
     }
 
-    /// Store a generated tile. Both slices must be exactly `TILE_CELLS * TILE_CELLS`.
+    /// Store a generated tile. Both slices must be exactly `TILE_STRIDE * TILE_STRIDE` —
+    /// the owned cells plus the one-cell skirt that lets neighbouring tiles mesh flush.
     ///
     /// Returns false and stores nothing on a length mismatch — a short buffer would
     /// otherwise be read as valid data with garbage past the end. Heights and biomes are
@@ -110,7 +111,7 @@ impl View {
         biomes: &[i32],
         heights: &[f32],
     ) -> bool {
-        let expected = (TILE_CELLS * TILE_CELLS) as usize;
+        let expected = (TILE_STRIDE * TILE_STRIDE) as usize;
         if biomes.len() != expected || heights.len() != expected {
             return false;
         }
@@ -167,10 +168,17 @@ impl View {
         }
     }
 
-    /// Cells along a tile edge, so JS can size its `gen_biomes` request without hardcoding.
+    /// Cells a tile owns along one edge.
     #[wasm_bindgen(getter)]
     pub fn tile_cells(&self) -> i32 {
         TILE_CELLS
+    }
+
+    /// Cells to actually request and store per edge: owned cells plus the skirt. This is
+    /// the width JS must pass to `gen_heights`, and the mesh grid width.
+    #[wasm_bindgen(getter)]
+    pub fn tile_stride(&self) -> i32 {
+        TILE_STRIDE
     }
 
     /// Block coordinate of a tile's north-west corner, as `[x, z]` — what JS passes to

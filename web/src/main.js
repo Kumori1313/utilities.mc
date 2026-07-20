@@ -86,8 +86,7 @@ function clearMeshes() {
 
 /// Fetch + mesh every tile within TILE_RADIUS of a centre, and drop meshes outside it.
 function refresh(centreX, centreZ) {
-  const n = view.tile_cells;
-  const tileSpan = n * SCALE;
+  const tileSpan = view.tile_cells * SCALE;
   const ctx = Math.floor(centreX / tileSpan);
   const ctz = Math.floor(centreZ / tileSpan);
 
@@ -108,7 +107,7 @@ function refresh(centreX, centreZ) {
       if (!biomes.length || !heights.length) { failed++; continue; }
 
       const [ox, oz] = view.tile_origin_block(tx, tz, SCALE);
-      const mesh = buildTileMesh(biomes, heights, n, SCALE, ox, oz, palette);
+      const mesh = buildTileMesh(biomes, heights, view.tile_stride, SCALE, ox, oz, palette);
       scene.add(mesh);
       meshes.set(key, mesh);
       built++;

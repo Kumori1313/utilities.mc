@@ -14,10 +14,19 @@
 //! All conversions floor rather than truncate, for the same reason Part 11 does: block
 //! -1 belongs to cell -1, not cell 0.
 
-/// Cells along one edge of a tile. 64 cells at scale 4 is a 256-block square — big enough
-/// that per-call overhead is amortised, small enough that a viewport edge does not drag in
-/// a large amount of unseen terrain.
+/// Cells a tile *owns* along one edge. 64 cells at scale 4 is a 256-block square — big
+/// enough that per-call overhead is amortised, small enough that a viewport edge does not
+/// drag in a large amount of unseen terrain.
 pub const TILE_CELLS: i32 = 64;
+
+/// Cells actually *stored* per edge: the owned cells plus a one-cell skirt.
+///
+/// Mesh vertices sit at cell centres, so n cells span only n-1 quads and adjacent tiles
+/// leave a visible one-cell gap you can see through. Storing one extra row and column —
+/// duplicating the neighbour's first cells — lets each tile mesh a full TILE_CELLS quads
+/// and meet its neighbour exactly. Costs ~3% redundant samples at 64 cells, which is
+/// cheaper than any seam-stitching scheme.
+pub const TILE_STRIDE: i32 = TILE_CELLS + 1;
 
 /// Identifies one cached tile. `scale` is part of the key because the same tile index at a
 /// different scale covers a different area entirely — omitting it would serve 4x-offset
@@ -79,8 +88,8 @@ pub fn tile_for_block(x: i32, z: i32, scale: i32) -> TileKey {
 
 /// Index into a tile's cell buffer for a block coordinate, or `None` if outside.
 ///
-/// Row-major, matching `gen_biomes`' documented `out[iy*sx*sz + iz*sx + ix]` with a single
-/// y layer: `iz * TILE_CELLS + ix`.
+/// Row-major with the skirt included, so the stride is [`TILE_STRIDE`], not [`TILE_CELLS`].
+/// Lookups only ever address owned cells (0..TILE_CELLS); the skirt exists for meshing.
 pub fn index_in_tile(key: &TileKey, x: i32, z: i32) -> Option<usize> {
     if !key.contains_block(x, z) {
         return None;
@@ -88,7 +97,7 @@ pub fn index_in_tile(key: &TileKey, x: i32, z: i32) -> Option<usize> {
     let (ocx, ocz) = key.origin_cell();
     let ix = block_to_cell(x, key.scale) - ocx;
     let iz = block_to_cell(z, key.scale) - ocz;
-    Some((iz * TILE_CELLS + ix) as usize)
+    Some((iz * TILE_STRIDE + ix) as usize)
 }
 
 /// Every tile overlapping an axis-aligned block-space viewport, in row-major order.

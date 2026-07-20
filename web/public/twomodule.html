@@ -66,7 +66,7 @@ if (engine.setWorld(BigInt.asUintN(64, SEED), mc, 0) !== 0) fail('engine set_wor
 const view = new View(256);
 view.set_world(BigInt.asUintN(64, SEED), mc, 0);
 
-const N = view.tile_cells;
+const N = view.tile_stride;
 const [minX, minZ, maxX, maxZ] = [-600, -600, 600, 600];
 
 // 1. Which tiles does Rust still need?
