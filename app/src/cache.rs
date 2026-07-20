@@ -20,8 +20,18 @@ pub struct World {
     pub dimension: i32,
 }
 
+/// One cached tile: biome ids and surface heights for the same grid, kept together
+/// because `gen_heights` produces both in a single pass and a mesh needs both. Splitting
+/// them into separate caches would allow one to be evicted while the other survives,
+/// leaving terrain shaped by one tile and coloured by another.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Tile {
+    pub biomes: Vec<i32>,
+    pub heights: Vec<f32>,
+}
+
 struct Entry {
-    data: Vec<i32>,
+    data: Tile,
     /// Monotonic stamp for LRU ordering. Not a timestamp — a counter, so it cannot go
     /// backwards under a clock adjustment.
     last_used: u64,
@@ -75,7 +85,7 @@ impl TileCache {
         true
     }
 
-    pub fn get(&mut self, key: &TileKey) -> Option<&[i32]> {
+    pub fn get(&mut self, key: &TileKey) -> Option<&Tile> {
         self.clock += 1;
         let clock = self.clock;
         match self.entries.get_mut(key) {
@@ -96,7 +106,7 @@ impl TileCache {
     ///
     /// Panics if no world is set: storing tiles for an unspecified world is how stale data
     /// gets in, so it is a programming error rather than something to paper over.
-    pub fn put(&mut self, key: TileKey, data: Vec<i32>) {
+    pub fn put(&mut self, key: TileKey, data: Tile) {
         assert!(
             self.world.is_some(),
             "set_world must be called before caching tiles"

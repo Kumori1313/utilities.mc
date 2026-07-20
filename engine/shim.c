@@ -20,6 +20,7 @@
 #include <emscripten.h>
 #include <limits.h>
 #include "cubiomes/generator.h"
+#include "cubiomes/util.h"
 
 // One generator for the whole module, seeded via set_world().
 //
@@ -35,16 +36,14 @@
 static Generator g;
 static int g_ready = 0;
 
+// Surface noise for mapApproxHeight(). Kept alongside the generator and re-initialised by
+// the same set_world() call, because a height field from one seed over biomes from another
+// would render as plausible terrain in the wrong shape.
+static SurfaceNoise g_sn;
+
 // Signatures verified against the vendored cubiomes/generator.h at e61f905.
 // Re-verify if you bump the submodule — Cubiomes' API shifts between releases.
-//
-// `scale` selects the coordinate space of x/y/z, and Cubiomes accepts only 1 or 4:
-//   1 — block coordinates. What a user types into a "go to coordinate" box.
-//   4 — biome coordinates, i.e. block/4. One sample per 4x4x4 cell, so a map tile
-//       costs 16x fewer calls. Use this for rendering, not for point lookups.
-// Passing block coordinates with scale=4 silently queries a point 4x further out in
-// every axis rather than erroring, so callers must be explicit — hence the parameter.
-// Anything other than 1 or 4 is rejected here instead of being handed to Cubiomes.
+
 // Configure the world. Call before any query, and again on any seed/version/dimension
 // change. Returns 0 on success, -1 if the version or dimension is out of range.
 EMSCRIPTEN_KEEPALIVE
@@ -54,11 +53,52 @@ int set_world(unsigned long long seed, int mc_version, int dim) {
 
     setupGenerator(&g, mc_version, 0);
     applySeed(&g, dim, seed);
+    initSurfaceNoise(&g_sn, dim, seed);
     g_ready = 1;
     return 0;
 }
 
+// Fill `out` with Cubiomes' biome colour table: 256 entries of RGB, 768 bytes total.
+//
+// Uses the library's own palette (AMIDST-derived, extended for 1.18+) rather than a
+// hand-written one, so colours stay consistent with every other Cubiomes-based map and do
+// not drift as biomes are added.
+EMSCRIPTEN_KEEPALIVE
+int biome_colors(unsigned char *out) {
+    if (!out) return -1;
+    initBiomeColors((unsigned char(*)[3])out);
+    return 0;
+}
+
+// Approximate Overworld surface height, with the matching biome ids in one pass.
+//
+// Fixed 1:4 horizontal scale — x/z/w/h are BIOME coordinates, not blocks. Unlike
+// gen_biomes there is no scale parameter, because Cubiomes' mapApproxHeight offers none.
+//
+// `y_out` receives w*h floats (height in blocks); `ids_out`, if non-NULL, receives w*h
+// biome ids. Both are row-major, out[j*w + i], matching gen_biomes.
+//
+// Overworld only: Cubiomes returns a sentinel for the Nether (a flat 127) and for the End,
+// rather than filling the buffer. Those are surfaced as -1 here so a caller cannot mistake
+// an unwritten buffer for flat terrain.
+EMSCRIPTEN_KEEPALIVE
+int gen_heights(int x, int z, int w, int h, float *y_out, int *ids_out) {
+    if (!g_ready || !y_out) return -1;
+    if (w <= 0 || h <= 0) return -1;
+    if (g.dim != DIM_OVERWORLD) return -1;
+
+    return mapApproxHeight(y_out, ids_out, &g, &g_sn, x, z, w, h) == 0 ? 0 : -1;
+}
+
 // Single-point lookup. Returns the biome id, or -1 on failure.
+//
+// `scale` selects the coordinate space of x/y/z, and Cubiomes accepts only 1 or 4:
+//   1 — block coordinates. What a user types into a "go to coordinate" box.
+//   4 — biome coordinates, i.e. block/4. One sample per 4x4x4 cell, so a map tile
+//       costs 16x fewer calls. Use this for rendering, not for point lookups.
+// Passing block coordinates with scale=4 silently queries a point 4x further out in
+// every axis rather than erroring, so callers must be explicit — hence the parameter.
+// Anything other than 1 or 4 is rejected here instead of being handed to Cubiomes.
 EMSCRIPTEN_KEEPALIVE
 int get_biome_at(int scale, int x, int y, int z) {
     if (!g_ready) return -1;

@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>utilities.mc — seed map</title>
+  <link rel="stylesheet" href="/src/style.css">
+</head>
+<body>
+  <div id="app">
+    <canvas id="view"></canvas>
+
+    <div id="panel">
+      <h1>utilities.mc</h1>
+      <p class="version">Minecraft <strong id="mcver">1.21.3</strong> — world generation
+        differs between versions, so this map is only correct for this one.</p>
+
+      <label>seed <input id="seed" value="1" spellcheck="false"></label>
+      <label>x <input id="cx" value="0" size="7"></label>
+      <label>z <input id="cz" value="0" size="7"></label>
+      <button id="go">load</button>
+
+      <div id="status">starting…</div>
+
+      <dl id="stats"></dl>
+
+      <p class="hint">drag to orbit · scroll to zoom · right-drag to pan</p>
+      <p class="hint" id="hover">—</p>
+    </div>
+  </div>
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>

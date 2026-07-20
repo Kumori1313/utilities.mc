@@ -1,0 +1,43 @@
+:root { color-scheme: dark; }
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; overflow: hidden; background: #11131a; }
+body { font: 13px/1.5 system-ui, sans-serif; color: #e6e8ee; }
+
+#app { position: relative; height: 100%; }
+#view { display: block; width: 100%; height: 100%; }
+
+#panel {
+  position: absolute; top: 1rem; left: 1rem; width: 19rem;
+  padding: 1rem; border-radius: .6rem;
+  background: #0b0d13d9; border: 1px solid #ffffff1f;
+  backdrop-filter: blur(6px);
+}
+#panel h1 { margin: 0 0 .25rem; font-size: 1.05rem; letter-spacing: .01em; }
+.version { margin: 0 0 .9rem; font-size: 11.5px; color: #9aa1b4; }
+.version strong { color: #cbd2e6; }
+
+label { display: inline-block; margin: 0 .6rem .6rem 0; color: #9aa1b4; }
+input {
+  font: inherit; width: 100%; margin-top: .15rem; padding: .3rem .45rem;
+  border-radius: .3rem; border: 1px solid #ffffff26;
+  background: #ffffff0d; color: inherit;
+}
+label:has(input[size="7"]) { width: 5.4rem; }
+
+button {
+  font: inherit; padding: .35rem .9rem; border-radius: .3rem; cursor: pointer;
+  border: 1px solid #6ea8fe4d; background: #6ea8fe26; color: #cfe0ff;
+}
+button:hover { background: #6ea8fe3d; }
+
+#status { margin: .8rem 0 .5rem; padding: .4rem .55rem; border-radius: .3rem;
+  background: #ffffff0d; font-size: 12px; }
+#status.err { background: #ff6b6b26; color: #ffb3b3; white-space: pre-wrap; }
+#status.ok { background: #5ad18c1f; color: #a6e9c4; }
+
+dl { display: grid; grid-template-columns: auto 1fr; gap: .1rem .7rem;
+  margin: 0; font-size: 12px; }
+dt { color: #9aa1b4; }
+dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; }
+
+.hint { margin: .7rem 0 0; font-size: 11.5px; color: #7f8698; }

@@ -32,12 +32,16 @@
 pub mod cache;
 pub mod tiles;
 
-use cache::{TileCache, World};
+use cache::{Tile, TileCache, World};
 use tiles::{TILE_CELLS, TileKey, index_in_tile, tiles_for_viewport};
 use wasm_bindgen::prelude::*;
 
 /// Cubiomes' "no biome" sentinel, returned for uncached lookups.
 pub const NO_BIOME: i32 = -1;
+
+/// Returned for an uncached height lookup. NaN rather than 0 so an uncached tile cannot be
+/// silently meshed as flat terrain at sea level.
+pub const NO_HEIGHT: f32 = f32::NAN;
 
 /// View state: the cache plus the world it belongs to.
 ///
@@ -93,16 +97,30 @@ impl View {
             .collect()
     }
 
-    /// Store a generated tile. `data` must be exactly `TILE_CELLS * TILE_CELLS` entries.
+    /// Store a generated tile. Both slices must be exactly `TILE_CELLS * TILE_CELLS`.
     ///
     /// Returns false and stores nothing on a length mismatch — a short buffer would
-    /// otherwise be read as valid biome data with garbage past the end.
-    pub fn store_tile(&mut self, tx: i32, tz: i32, scale: i32, data: &[i32]) -> bool {
+    /// otherwise be read as valid data with garbage past the end. Heights and biomes are
+    /// stored together so a mesh can never be shaped by one tile and coloured by another.
+    pub fn store_tile(
+        &mut self,
+        tx: i32,
+        tz: i32,
+        scale: i32,
+        biomes: &[i32],
+        heights: &[f32],
+    ) -> bool {
         let expected = (TILE_CELLS * TILE_CELLS) as usize;
-        if data.len() != expected {
+        if biomes.len() != expected || heights.len() != expected {
             return false;
         }
-        self.cache.put(TileKey { tx, tz, scale }, data.to_vec());
+        self.cache.put(
+            TileKey { tx, tz, scale },
+            Tile {
+                biomes: biomes.to_vec(),
+                heights: heights.to_vec(),
+            },
+        );
         true
     }
 
@@ -113,8 +131,39 @@ impl View {
             return NO_BIOME;
         };
         match self.cache.get(&key) {
-            Some(data) => data.get(idx).copied().unwrap_or(NO_BIOME),
+            Some(t) => t.biomes.get(idx).copied().unwrap_or(NO_BIOME),
             None => NO_BIOME,
+        }
+    }
+
+    /// Surface height at a block coordinate, or [`NO_HEIGHT`] if its tile is not cached.
+    pub fn height_at(&mut self, x: i32, z: i32, scale: i32) -> f32 {
+        let key = tiles::tile_for_block(x, z, scale);
+        let Some(idx) = index_in_tile(&key, x, z) else {
+            return NO_HEIGHT;
+        };
+        match self.cache.get(&key) {
+            Some(t) => t.heights.get(idx).copied().unwrap_or(NO_HEIGHT),
+            None => NO_HEIGHT,
+        }
+    }
+
+    /// A whole tile's biome ids, for meshing. Empty if not cached.
+    ///
+    /// The renderer needs the full grid at once; point lookups would be the wrong shape
+    /// for building geometry.
+    pub fn tile_biomes(&mut self, tx: i32, tz: i32, scale: i32) -> Vec<i32> {
+        match self.cache.get(&TileKey { tx, tz, scale }) {
+            Some(t) => t.biomes.clone(),
+            None => Vec::new(),
+        }
+    }
+
+    /// A whole tile's surface heights, for meshing. Empty if not cached.
+    pub fn tile_heights(&mut self, tx: i32, tz: i32, scale: i32) -> Vec<f32> {
+        match self.cache.get(&TileKey { tx, tz, scale }) {
+            Some(t) => t.heights.clone(),
+            None => Vec::new(),
         }
     }
 
