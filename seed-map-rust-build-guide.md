@@ -6,7 +6,7 @@ compiled to WebAssembly. Three tools share one codebase and one deployment:
 | Tool | Guide | Depends on |
 |---|---|---|
 | **Seed map renderer** — 3D biome/terrain view for any seed | Parts 0–9 | Cubiomes (C, via Emscripten) |
-| **Enchantment calculator** — predicts enchanting table results | Part 10 | Pure Rust |
+| **Enchantment calculator** — predicts enchanting-table results and anvil combine costs | Part 10 | Pure Rust |
 | **Nether ↔ Overworld converter** — portal coordinate & linking math | Part 11 | Pure Rust |
 
 The seed map is the hard one, and it sets the architecture for everything else; the other two
@@ -304,6 +304,14 @@ pure Rust, targeting `wasm32-unknown-unknown` normally, with none of Part 3's pr
       management, an LRU-style cache so re-visited chunks don't re-query Cubiomes,
       coordinate/chunk math, and any post-processing on the raw biome/height data before
       it reaches the renderer
+- [ ] **NB — this snippet is a smoke test, not the shape to ship.** Passing `seed, version` on
+      every call implies re-seeding the generator per sample, and in Cubiomes that re-runs
+      `applySeed` — measured at roughly **13× the cost of generating a whole tile**. Split the C
+      side into a `set_world(seed, version, dim)` called once when the world changes and a query
+      that takes only coordinates. Measured separately: batching many samples into one
+      `gen_biomes` call rather than one `get_biome_at` per sample is **not** a meaningful win
+      (biome generation dominates the JS↔WASM boundary cost by orders of magnitude); the reason
+      to work in tiles is the *cache*, not the batching.
 - [ ] Build it: `wasm-pack build --target web`
 - [ ] Confirm it produces `app/pkg/` with the `.wasm` and JS glue, and that a plain test
       page can import both `app`'s output and `cubiomes.js` side by side
@@ -325,6 +333,15 @@ functions successfully calling out to the Cubiomes JS glue and returning correct
       first, expose its `ccall`/`cwrap`-wrapped functions on `window` (matching the
       `js_namespace = window` binding from Part 6), *then* import and initialize the
       `app` wasm-bindgen module, since Rust's calls depend on Cubiomes already being ready
+- [ ] **NB — the `window` globals and the "load order is load-bearing" ordering only apply if
+      Rust calls *out* to Cubiomes** (the Part 6 sketch's design). If you instead let JS drive the
+      loop — JS calls `gen_biomes`/`gen_heights`, copies the buffer out of the Emscripten heap, and
+      hands it to Rust via a `store_tile`-style function — then nothing on the Rust side reaches for
+      `window`, the two modules load independently, and their order stops mattering. The
+      JS-drives-Rust direction is also what lets `app` stay a plain `wasm32-unknown-unknown` module
+      with no `window` coupling. Note too that the wasm-bindgen `app.js`/`app_bg.wasm` live in
+      `public/` and are *served*, not bundled, so import them at runtime (a dynamic `import()`),
+      not with a static import Vite/Rollup will try to resolve at build time.
 - [ ] **Heightmap → mesh**: for each visible chunk, pull height/biome data from your Rust
       layer, build a `THREE.PlaneGeometry` (or a manual `BufferGeometry` for more control),
       and displace vertex heights based on the returned elevation values
@@ -567,12 +584,14 @@ The three numbers shown on the enchanting table's slots, from bookshelf count `b
   ```rust
   pub fn offered_levels(xp_seed: i32, bookshelves: i32) -> [i32; 3] {
       let b = bookshelves.clamp(0, 15);
+      // Seeded ONCE, outside the loop. All three slots draw from this one stream, in
+      // order; it is NOT reset between them.
+      let mut r = JavaRandom::new(xp_seed as i64);
       let mut out = [0; 3];
       for slot in 0..3 {
-          let mut r = JavaRandom::new((xp_seed as i64) + slot as i64);
           let base = r.next_int_bound(8) + 1 + (b >> 1) + r.next_int_bound(b + 1);
           let lvl = match slot {
-              0 => base / 3,
+              0 => (base / 3).max(1),          // NB: max(.,1) — the game floors slot 0 at 1
               1 => (base * 2) / 3 + 1,
               _ => base.max(b * 2),
           };
@@ -581,8 +600,16 @@ The three numbers shown on the enchanting table's slots, from bookshelf count `b
       out
   }
   ```
-- [ ] Note the seeding: **each slot re-seeds from `xp_seed + slot`**, it does not continue one
-  stream across all three. Getting this wrong gives you a correct-looking slot 0 and wrong 1–2.
+- [ ] Note the seeding: the offered levels come from **one stream seeded once with `xp_seed`**,
+  the three slots drawing sequentially — the generator is *not* reset between them. (Verified
+  against the Minecraft Wiki's "Enchanting table mechanics" and Earthcomputer/EnchantmentCracker,
+  whose caller carries the comment "Important they're done in a row like this because RNG is not
+  reset in between".) The `xp_seed + slot` re-seeding is the *roll* in 10.4, a different phase;
+  do not apply it here. Getting this wrong gives a correct-looking slot 0 and wrong slots 1–2 —
+  the same distribution, different values, so range-based tests pass and only an exact vector
+  catches it.
+- [ ] The slot-0 floor is `max(base / 3, 1)`, not `base / 3`. Without it, low `base` renders 0
+  in the top slot where the game shows 1.
 - [ ] The `xp_seed` is a **per-player value** that persists until the player actually enchants
   something (any enchant re-rolls it). Your calculator takes it as an input — treat "how does
   the user obtain their xp seed" as a UI/UX question for 10.5, not a math question.
@@ -593,8 +620,10 @@ The three numbers shown on the enchanting table's slots, from bookshelf count `b
 
 This is the part with the most steps and therefore the most places to desync. Order is load-bearing.
 
-- [ ] Re-seed with `xp_seed + slot` **again** (the display in 10.3 and the roll here both start
-  from the same seed — they are two reads of the same stream, not sequential ones).
+- [ ] Re-seed with **`xp_seed + slot`** here. This is genuinely different from 10.3: the offered
+  levels use one stream seeded once with `xp_seed` (no `+ slot`), while each slot's *roll* starts
+  a fresh stream from `xp_seed + slot`. They are not "two reads of the same stream" — they are two
+  different seedings, and conflating them is the single easiest desync to introduce.
 - [ ] Apply the **enchantability modifier**, then the random ±15% bonus:
   ```rust
   let e = material_enchantability;
@@ -606,24 +635,36 @@ This is the part with the most steps and therefore the most places to desync. Or
   ```
   The two `next_float()` calls summed is what makes the bonus triangular rather than uniform —
   and it is **two separate draws**, not one doubled.
-- [ ] Collect every `(enchantment, level)` candidate whose `[min_cost, max_cost]` window contains
-  the modified level, then do a **weighted random pick** over them by rarity weight. Match Java's
-  weighted-selection loop exactly (`nextInt(total_weight)`, then walk the list subtracting).
-- [ ] Then the multi-enchantment loop, which is where extras come from:
+- [ ] Build the candidate list, then do a **weighted random pick** by rarity weight (Java's
+  loop: `nextInt(total_weight)`, then walk the list subtracting until negative). Two things about
+  the list are easy to get wrong and both produce plausible-but-wrong output:
+  - **One candidate per enchantment, not per level.** For each applicable enchantment take the
+    *highest* level whose `[min_cost, max_cost]` window contains the modified level, and stop.
+    Collecting "every `(enchantment, level)`" — as an earlier draft of this guide said — counts a
+    multi-level enchantment's weight several times and skews the draw.
+  - **Gate on table-obtainability, not just item applicability.** 7 of 1.21.3's 42 enchantments
+    (mending, frost_walker, soul_speed, swift_sneak, wind_burst, and both curses) can never come
+    from a table, yet they still declare item tags — so a filter that checks only "does this apply
+    to the item" rolls them anyway. Use the `in_enchanting_table` tag. This is separate from the
+    treasure gate.
+- [ ] Then the multi-enchantment loop, which is where extras come from. **The order below is the
+  game's; an earlier draft of this guide halved the level first, which makes the first extra
+  enchantment far too rare:**
   ```
   loop {
-      level = level / 2;                     // integer halving each iteration
-      if r.next_int_bound(50) > level { break; }
-      remove candidates incompatible with what's already picked;
+      if r.next_int_bound(50) > level { break; }   // roll against the CURRENT level, first
+      remove candidates incompatible with what's already picked;   // filter BEFORE the pick
       if none remain { break; }
       pick another (weighted);
+      level = level / 2;                            // halve at the END, not the start
   }
   ```
-  Order matters: the halve/roll/filter/pick sequence must match the game's, and incompatibility
-  filtering happens **before** the next pick, not after.
-- [ ] Books are a special case — they accept enchantments that no other item does, and (version
-  depending) treasure enchantments are gated differently. Encode "is this enchantment applicable
-  to this item" as a predicate in the data table, not as `if item == Book` branches in logic.
+- [ ] Books are a special case in two ways. They accept **any** table enchantment regardless of
+  item tags (vanilla's check is `isPrimaryItem(stack) || stack.is(Items.BOOK)`) — without the
+  bypass a book matches nothing and rolls empty. And after rolling, **a book holding more than one
+  enchantment has one removed at random** (`list.remove(rand.nextInt(list.size()))`); that draw
+  consumes RNG, so omitting it desyncs everything after it. Encode applicability as a data-table
+  predicate, not `if item == Book` branches in logic.
 
 ## 10.5 — Phase 5: Golden Vectors & Wiring Up
 
@@ -645,6 +686,54 @@ This is the part with the most steps and therefore the most places to desync. Or
 
 **Checkpoint:** every golden vector passes, and the browser UI reproduces a real in-game
 enchantment you did not use while developing.
+
+## 10.6 — Phase 6: The Anvil Cost Calculator
+
+A second, independent enchantment tool that shares 10.2's data tables but **none** of its RNG.
+Anvil combining is fully deterministic integer arithmetic — no `JavaRandom`, no xp seed — so it
+is far simpler to get bit-exact than the table roll, and golden vectors are trivial to capture
+(any anvil in a creative world). It answers the question the table calculator can't: *"I have
+these enchanted books and this tool — what does merging them cost, and in what order?"*
+
+- [ ] **Reuse the 10.2 crate.** You need each enchantment's `max_level`, its incompatibility set,
+  its item-applicability predicate, and its **`anvil_cost`** (the per-level cost multiplier — this
+  field is already in the enchantment data if you sourced it from the game's registry, as 10.2
+  advises). You do **not** need the weights or cost curves the table roll used.
+- [ ] **Model the combine of a target item + a sacrifice (item or book).** The result cost is the
+  sum of three parts:
+  1. **Prior work penalty (PWP)** — the dominant term, and the one players find surprising. Every
+     item carries a stored "repair cost" that starts at 0; **both** inputs add their current repair
+     cost to the combine total. After combining, the *result's* repair cost becomes
+     `2 × max(costA, costB) + 1`, so a never-touched item is 0, then 1, 3, 7, 15… — the penalty is
+     `2^work − 1`, exponential and *independent of the enchantments*. This is what actually drives
+     real costs and the "Too Expensive!" wall, not the enchantment multipliers.
+  2. **Per-enchantment cost.** For each enchantment on the sacrifice, resolve the result level
+     against the target — absent → sacrifice's level; equal level below max → level + 1; unequal →
+     the higher — then add `result_level × multiplier`, where the multiplier is that enchantment's
+     `anvil_cost`, **halved when the sacrifice is a book** (round per your pinned version's rule —
+     verify the direction, since getting item-vs-book backwards makes book costs ~4× off).
+  3. **Rename**, if any: a flat `+1`.
+- [ ] **Landmines, all of which produce plausible-but-wrong totals:**
+  - The PWP is `2^work − 1` and applies to **both** items — forgetting the sacrifice's PWP
+    undercounts every non-fresh combine.
+  - **Order changes the total.** Because PWP compounds, merging N books into a tool in a balanced
+    binary tree costs less than a linear chain. The genuinely useful feature here — and where Rust
+    earns its place over a naive JS calculator — is a solver that finds the **minimum-total-cost
+    combining order** (a min-cost binary-tree / DP problem over the inputs).
+  - Incompatible enchantments (e.g. Sharpness onto a tool that has Smite) don't apply and, in Java,
+    still add a small cost per conflict — model conflicts, don't silently drop them.
+  - The **40-level "Too Expensive!" cap is survival-only**; creative ignores it. Don't hard-block
+    in a calculator that also serves creative planning.
+- [ ] **These constants are version-specific — verify them against your pinned version's data**,
+  same discipline as 10.2 and Part 8. The `anvil_cost` values, the item/book halving, and the
+  conflict-cost rule have all shifted across releases.
+- [ ] Capture a handful of golden vectors from a real anvil (the level cost shown in the UI) and
+  commit them next to 10.5's. Being deterministic, these never flake — a mismatch is always a real
+  regression.
+
+**Checkpoint:** for a fixed set of inputs and prior-work values, the calculator reproduces the
+exact level cost an in-game anvil shows, and its suggested combine order is no more expensive than
+the order you'd work out by hand.
 
 ---
 
@@ -685,13 +774,18 @@ Naive conversion answers "what coordinate corresponds to this one." The question
 actually have is "will my two portals link?" — a different and more valuable question.
 
 - [ ] Model the search behavior: when a player enters a portal, the game scales the coordinate,
-  then searches the destination dimension for an **existing portal within a horizontal radius
-  (128 blocks in the destination's own scale)** of that target, linking to the nearest one if
-  found and creating a new portal if not.
-- [ ] The practical consequence, and the thing to surface in the UI: **a 128-block search radius
-  in the Nether covers 1024 Overworld blocks.** This is why two Overworld portals built too
-  close together both link to the same Nether portal — a very common player-facing problem, and
-  a genuinely useful thing for this tool to warn about.
+  then searches the destination dimension for an **existing portal within a horizontal radius**
+  of that target, linking to the nearest one if found and creating a new portal if not. The
+  radius is **asymmetric**, and an earlier draft of this guide got it wrong. Per the Minecraft
+  Wiki's "Nether Portal" article (verified against a 1.21.3-era revision): the search area is
+  **17×17 chunks, ±128 blocks, when searching the Overworld, but only 33×33 blocks, ±16 blocks,
+  when searching the Nether.** The two are equivalent once scaled — 16 Nether blocks *is* 128
+  Overworld blocks — which is where the confusion comes from.
+- [ ] The practical consequence, and the thing to surface in the UI: **a Nether search of ±16
+  blocks covers 128 Overworld blocks** — not 1024, which came from wrongly applying the Overworld
+  radius in the Nether. This is why two Overworld portals built within ~128 blocks of each other
+  both link to the same Nether portal — a very common player-facing problem, and a genuinely
+  useful thing for this tool to warn about.
 - [ ] Useful UI outputs beyond the raw number:
   - Given two portals, do they link, and if not, how far off is the pairing?
   - Given a desired destination, where should the counterpart portal be built?
@@ -725,16 +819,24 @@ actually have is "will my two portals link?" — a different and more valuable q
       `wrapping_*` so debug and release behave identically (10.1)
 - [ ] Enchantment cost tables are **version-specific and large** — generate them from data,
       never hand-transcribe, and pin the version in the file (10.2)
-- [ ] Each enchanting slot **re-seeds** from `xp_seed + slot`; it is not one continuous
-      stream across the three slots (10.3)
+- [ ] **Offered levels** (10.3) draw from one stream seeded **once** with `xp_seed`; the per-slot
+      `xp_seed + slot` re-seed belongs to the **roll** (10.4). Swapping them gives a right slot 0
+      and wrong 1–2 — same distribution, so only an exact vector catches it (10.3)
+- [ ] Slot 0's offered level is `max(base / 3, 1)`, not `base / 3` (10.3)
 - [ ] The ±15% bonus uses **two separate `nextFloat()` draws** summed — one draw doubled gives
       a wrong distribution that still looks plausible (10.4)
-- [ ] Incompatibility filtering happens **before** each subsequent pick in the multi-enchant
-      loop; reordering it changes results (10.4)
+- [ ] The multi-enchant loop rolls against the **current** level then halves at the **end**, not
+      the other way round; incompatibility filtering happens **before** each pick (10.4)
+- [ ] Take **one candidate per enchantment** (highest fitting level), and gate on
+      `in_enchanting_table` — 7 of 42 enchantments are never table-obtainable but still declare
+      item tags (10.4)
+- [ ] A book with more than one rolled enchantment has **one removed at random**, which consumes
+      RNG; omit it and everything after desyncs (10.4)
 - [ ] Rust's `/` truncates toward zero — **use `div_euclid`** for Overworld→Nether or every
       negative coordinate is off by one (11.1)
 - [ ] **Y is never scaled** by the 1:8 ratio; Y clamping is a portal-placement rule only (11.1, 11.2)
-- [ ] A 128-block Nether search radius spans **1024 Overworld blocks** — the cause of most
-      unintended portal linking, and worth warning about explicitly (11.2)
+- [ ] The portal search radius is **asymmetric**: ±128 blocks searching the Overworld, ±16
+      searching the Nether. A Nether search therefore spans **128 Overworld blocks** (not 1024) —
+      the cause of most unintended portal linking, and worth warning about explicitly (11.2)
 - [ ] Neither part depends on Cubiomes or Emscripten — **keep them out of `engine/`** so they
       stay on the easy side of the Part 0 libc boundary (10.0)

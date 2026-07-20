@@ -1,12 +1,50 @@
+//! CLI for cross-referencing the enchantment calculator (Part 10.5 aid).
+//!
+//!   cargo run -p enchant --example predict -- <xp_seed> <bookshelves> [item ...]
+//!
+//! xp_seed is the per-player value the other calculator also takes as input; both must
+//! use the SAME seed or nothing will line up. Bookshelves 0..=15. Items default to a
+//! representative spread if none are given.
+
 use enchant::{MC_VERSION, enchantments_in_slot, offered_levels};
 
 fn main() {
-    let (xp_seed, shelves) = (-1234567, 15);
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    if args.len() < 2 {
+        eprintln!("usage: predict <xp_seed> <bookshelves> [item ...]");
+        eprintln!("  e.g. predict -1234567 15 diamond_sword book");
+        std::process::exit(2);
+    }
+
+    let xp_seed: i32 = args[0].parse().expect("xp_seed must be a 32-bit integer");
+    let shelves: i32 = args[1].parse().expect("bookshelves must be an integer");
+    let items: Vec<String> = if args.len() > 2 {
+        args[2..].to_vec()
+    } else {
+        [
+            "diamond_sword",
+            "golden_sword",
+            "iron_pickaxe",
+            "book",
+            "bow",
+        ]
+        .iter()
+        .map(|s| s.to_string())
+        .collect()
+    };
+
     println!("utilities.mc enchantment calculator — Minecraft {MC_VERSION}");
-    println!("xp seed {xp_seed}, {shelves} bookshelves\n");
-    for item in ["diamond_sword", "golden_sword", "book", "bow"] {
+    println!("xp seed {xp_seed}, {shelves} bookshelves");
+    println!("(offered levels are the green numbers; enchantments are what each slot rolls)\n");
+
+    let levels = offered_levels(xp_seed, shelves);
+    println!(
+        "offered levels: {} / {} / {}\n",
+        levels[0], levels[1], levels[2]
+    );
+
+    for item in &items {
         println!("{item}:");
-        let levels = offered_levels(xp_seed, shelves);
         for (slot, &lv) in levels.iter().enumerate() {
             if lv == 0 {
                 println!("  slot {}: (not offered)", slot + 1);
