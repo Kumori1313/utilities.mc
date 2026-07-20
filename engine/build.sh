@@ -39,8 +39,8 @@ emcc \
     -s MODULARIZE=1 \
     -s EXPORT_ES6=1 \
     -s EXPORT_NAME="createCubiomesModule" \
-    -s EXPORTED_FUNCTIONS="['_get_biome_at','_str2mc','_mc2str','_biome2str']" \
-    -s EXPORTED_RUNTIME_METHODS="['ccall','cwrap']" \
+    -s EXPORTED_FUNCTIONS="['_set_world','_get_biome_at','_gen_biomes','_biome_buffer_size','_str2mc','_mc2str','_biome2str','_malloc','_free']" \
+    -s EXPORTED_RUNTIME_METHODS="['ccall','cwrap','HEAP32']" \
     -s ALLOW_MEMORY_GROWTH=1 \
     -s ENVIRONMENT=web \
     -o "$OUT_DIR/cubiomes.js"

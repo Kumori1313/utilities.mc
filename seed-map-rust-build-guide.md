@@ -1,4 +1,20 @@
-# Building a Minecraft Seed Map Renderer in Rust — Start to Finish
+# utilities.mc — Build Guide
+
+**`utilities.mc`** is a browser-based suite of Minecraft utilities, written in Rust and
+compiled to WebAssembly. Three tools share one codebase and one deployment:
+
+| Tool | Guide | Depends on |
+|---|---|---|
+| **Seed map renderer** — 3D biome/terrain view for any seed | Parts 0–9 | Cubiomes (C, via Emscripten) |
+| **Enchantment calculator** — predicts enchanting table results | Part 10 | Pure Rust |
+| **Nether ↔ Overworld converter** — portal coordinate & linking math | Part 11 | Pure Rust |
+
+The seed map is the hard one, and it sets the architecture for everything else; the other two
+are pure Rust with no C dependency and can be built in parallel or first.
+
+---
+
+## Building the Seed Map Renderer — Start to Finish
 
 A phased, checkable build plan: prerequisites → native validation → the critical WASM
 spike → application → frontend → deployment. Every phase ends before the next begins —
@@ -63,28 +79,51 @@ treat it as an experiment, not a fallback you can rely on working first try.
 
 Install everything up front so later phases aren't interrupted.
 
-- [ ] **Rust toolchain** via [rustup](https://rustup.rs) (`rustup --version` to confirm)
-- [ ] **`wasm32-unknown-unknown` target**: `rustup target add wasm32-unknown-unknown`
-- [ ] **`wasm-pack`**: `cargo install wasm-pack`
-- [ ] **Node.js (LTS) + npm** — for the frontend build tooling
-- [ ] **A native C compiler** (clang or gcc) — needed for Part 2's native sanity check,
-      independent of anything WASM-related
-- [ ] **CMake and Git** — Cubiomes' surrounding tooling and its own repo checkout use these
-- [ ] **Emscripten SDK (emsdk)**:
-  ```bash
-  git clone https://github.com/emscripten-core/emsdk.git
-  cd emsdk
-  ./emsdk install latest
-  ./emsdk activate latest
-  source ./emsdk_env.sh   # re-run this in every new shell session
-  emcc --version           # confirm it works
-  ```
+### Arch Linux (the reference environment)
+
+Everything this project needs is in the official repos — no emsdk clone, no `cargo install`:
+
+```bash
+sudo pacman -S --needed rust rust-wasm wasm-pack emscripten \
+                        nodejs npm cmake git clang
+```
+
+- `rust` — compiler + cargo. **This project uses the distro toolchain, not rustup.** Arch's
+  `rustup` package *conflicts with* `rust`/`cargo`/`rustfmt` and installing it removes them;
+  there's no need for that here, since `rust-wasm` supplies the targets we'd otherwise add with
+  `rustup target add`. If you later want per-project toolchain pinning (`rust-toolchain.toml`),
+  that's the point to reconsider — it's the one thing this setup gives up.
+- `rust-wasm` — the `wasm32-unknown-unknown` std (and `wasm32-wasip1`, which covers Appendix B's
+  Rust side for free; Path B would still need a separate wasi-sdk for the C half)
+- `emscripten` — provides `emcc`. There is no `emsdk_env.sh` to source per shell and no SDK
+  checkout to maintain, but note the binary is at `/usr/lib/emscripten/emcc` with **no
+  `/usr/bin` symlink**; the package adds that directory to PATH via
+  `/etc/profile.d/emscripten.sh`. That file is read at shell startup, so **`emcc` will not be
+  found in a shell that was already open when you installed it** — open a new terminal, or
+  `source /etc/profile.d/emscripten.sh`. Use `/usr/lib/emscripten` if something later asks for
+  an `EMSDK` path. It conflicts with `binaryen` (Emscripten vendors its own copy), so pacman
+  will offer to replace that package if you have it.
+- `clang` — for Part 2's native build only, unrelated to anything WASM
+
+### Other platforms
+
+Same components, different sourcing. Use [rustup](https://rustup.rs) plus
+`rustup target add wasm32-unknown-unknown` and `cargo install wasm-pack`, and install Emscripten
+via the [emsdk](https://github.com/emscripten-core/emsdk) checkout
+(`./emsdk install latest && ./emsdk activate latest`, then `source ./emsdk_env.sh` **in every new
+shell session** — the main ergonomic difference from the packaged build above). Node.js LTS,
+CMake, Git, and a C compiler come from your platform's usual channels.
+
+### Regardless of platform
+
 - [ ] **A code editor with `rust-analyzer`** (VS Code + rust-analyzer extension is the
       path of least resistance)
 - [ ] *(Path B only, skip for now)* **wasi-sdk** — see Appendix B
 
 **Checkpoint:** `rustc --version`, `wasm-pack --version`, `node -v`, `emcc --version`,
-`cmake --version` all return something without error.
+`cmake --version` all return something without error. Confirm the WASM target is present too —
+`rustc --print target-list | grep wasm32-unknown-unknown`, and that a trivial
+`cargo build --target wasm32-unknown-unknown` on a `cargo new --lib` scratch crate succeeds.
 
 ---
 

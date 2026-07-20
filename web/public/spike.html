@@ -55,17 +55,17 @@
 const status = document.getElementById('status');
 const rows = document.getElementById('rows');
 
-let getBiomeAt, str2mc, biome2str;
+let setWorld, getBiomeAt, str2mc, biome2str;
 
 try {
   const { default: createCubiomesModule } = await import('./wasm/cubiomes.js');
   const Module = await createCubiomesModule();
 
   // Flat C ABI across the boundary — scalars and strings only (Part 5).
-  getBiomeAt = Module.cwrap('get_biome_at', 'number',
-                            ['number', 'number', 'number', 'number', 'number', 'number']);
-  str2mc     = Module.cwrap('str2mc',     'number', ['string']);
-  biome2str  = Module.cwrap('biome2str',  'string', ['number', 'number']);
+  setWorld   = Module.cwrap('set_world',    'number', ['number', 'number', 'number']);
+  getBiomeAt = Module.cwrap('get_biome_at', 'number', ['number', 'number', 'number', 'number']);
+  str2mc     = Module.cwrap('str2mc',       'number', ['string']);
+  biome2str  = Module.cwrap('biome2str',    'string', ['number', 'number']);
 
   status.textContent = 'module loaded ✓';
 } catch (e) {
@@ -102,7 +102,15 @@ function query() {
   // is the cheap path for map tiles but queries 4x further out for the same numbers.
   const scale = +document.getElementById('scale').value;
 
-  const id = getBiomeAt(seed, mc, scale, x, y, z);
+  // The generator is stateful: seed/version/dimension are installed once, then queried.
+  // The spike re-installs on every click because the inputs may have changed; a real
+  // renderer calls this only when the world actually changes, never per sample.
+  if (setWorld(seed, mc, 0 /* DIM_OVERWORLD */) !== 0) {
+    status.innerHTML = `<span class="err">set_world failed (version ${verStr}, mc=${mc})</span>`;
+    return;
+  }
+
+  const id = getBiomeAt(scale, x, y, z);
   if (id < 0) {
     status.innerHTML = `<span class="err">query failed (scale must be 1 or 4; got ${scale})</span>`;
     return;
