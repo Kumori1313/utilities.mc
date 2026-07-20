@@ -1,0 +1,7 @@
+[package]
+name = "portal"
+version = "0.1.0"
+edition = "2024"
+
+# Part 11.3: same pure-Rust family as the enchant crate. No C, no Cubiomes, no Emscripten.
+[dependencies]
