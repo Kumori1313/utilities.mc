@@ -2,48 +2,152 @@
 //!
 //! This crate holds **no C dependency**. That is the entire point of the Path A split:
 //! Cubiomes is compiled separately by `engine/build.sh` via Emscripten, and this crate
-//! reaches it through JS bindings. Adding `cubiomes`/`cubiomes-sys` here would drag the
-//! Part 0 libc problem back into a crate that currently builds cleanly on
-//! `wasm32-unknown-unknown`.
+//! reaches it through JS. Adding `cubiomes`/`cubiomes-sys` here would drag the Part 0 libc
+//! problem back into a crate that currently builds cleanly on `wasm32-unknown-unknown`.
 //!
-//! Everything that is genuinely Rust's strength belongs here: view state, an LRU chunk
-//! cache, coordinate/chunk math, and post-processing of raw biome data before it reaches
-//! the renderer.
+//! # Deviation from the guide's Part 6 sketch
+//!
+//! The guide wraps `get_biome_at` as `biome_for_view(seed, version, cx, cz)`, calling
+//! `set_world` **per sample**. That re-seeding is the real cost: `applySeed` rebuilds the
+//! whole noise stack, measured at ~13x the cost of an entire tile in Part 3b. Hoisting it
+//! to world-change time is the actual win, and this crate's [`View::set_world`] is where
+//! that happens.
+//!
+//! What is *not* a win — and was worth measuring rather than assuming — is reducing the
+//! number of JS boundary crossings. Generating a 1200x1200 block region at scale 4
+//! (147,456 samples) takes ~284 ms as 36 batched `gen_biomes` calls and ~285 ms as 147,456
+//! individual `get_biome_at` calls. Identical. Biome generation dominates so completely
+//! that per-call overhead is invisible, so "batch to avoid crossings" is not the reason to
+//! prefer tiles.
+//!
+//! The reason to prefer tiles is **caching**: 160,801 warm lookups through this crate take
+//! ~7 ms, versus ~1.9 us per sample to regenerate. That is the ~80x, and it needs a cache
+//! keyed by some unit — which is what a tile is.
+//!
+//! One hard constraint shapes the rest: `gen_biomes` writes into **Emscripten's** heap, and
+//! this module is a separate `wasm32-unknown-unknown` instance with its own memory. Rust
+//! cannot read that buffer directly, so JS must copy it across regardless. Hence the split:
+//! JS generates and copies, this crate owns tile math, caching, and lookups.
 
+pub mod cache;
+pub mod tiles;
+
+use cache::{TileCache, World};
+use tiles::{TILE_CELLS, TileKey, index_in_tile, tiles_for_viewport};
 use wasm_bindgen::prelude::*;
 
-// Provided by engine/cubiomes.js, which the frontend loads and exposes on `window`
-// BEFORE initializing this module (see Part 7 — load order is load-bearing).
-#[wasm_bindgen]
-extern "C" {
-    /// Installs seed/version/dimension on the shim's single generator. Must be called
-    /// before any query, and again whenever the world changes. Returns 0, or -1 if the
-    /// version or dimension is out of range.
-    ///
-    /// This is separate from the query calls because `applySeed` builds the entire noise
-    /// stack — roughly 13x the cost of a whole 128x128 tile if paid per sample. Hoist it.
-    #[wasm_bindgen(js_namespace = window)]
-    fn set_world(seed: u64, version: i32, dim: i32) -> i32;
+/// Cubiomes' "no biome" sentinel, returned for uncached lookups.
+pub const NO_BIOME: i32 = -1;
 
-    /// `scale` is 1 for block coordinates or 4 for biome coordinates (block/4); the
-    /// shim returns -1 for anything else. It is an explicit parameter because passing
-    /// block coordinates at scale 4 silently reads a point 4x further out on every
-    /// axis rather than failing.
-    #[wasm_bindgen(js_namespace = window)]
-    fn get_biome_at(scale: i32, x: i32, y: i32, z: i32) -> i32;
+/// View state: the cache plus the world it belongs to.
+///
+/// JS drives the loop — ask [`View::tiles_to_fetch`] what is missing, generate those tiles
+/// with the engine module, feed them back with [`View::store_tile`], then query.
+#[wasm_bindgen]
+pub struct View {
+    cache: TileCache,
 }
 
-/// Smoke test for the two-module wiring: proves this crate can call through to the
-/// Emscripten-built Cubiomes module. Replace with real view logic once Part 5 lands.
-///
-/// Re-seeds on every call, which is exactly what the shim's split exists to avoid — fine
-/// for a one-shot smoke test, wrong for the tile loop this becomes. When Part 6 wires up
-/// the real view, `set_world` belongs at world-change time and the sampling belongs in
-/// `gen_biomes`, which this binding does not yet expose.
 #[wasm_bindgen]
-pub fn biome_for_view(seed: u64, version: i32, x: i32, z: i32) -> i32 {
-    if set_world(seed, version, 0 /* DIM_OVERWORLD */) != 0 {
-        return -1;
+impl View {
+    /// `capacity` is in tiles. At the default 64x64 cells that is ~16KB per tile, so 256
+    /// tiles is roughly 4MB — comfortable, and enough for a large viewport plus margin.
+    #[wasm_bindgen(constructor)]
+    pub fn new(capacity: usize) -> View {
+        View {
+            cache: TileCache::new(capacity),
+        }
     }
-    get_biome_at(1, x, 64, z)
+
+    /// Point the view at a world. Returns true if cached tiles were discarded.
+    ///
+    /// The caller must also call the engine's own `set_world` — this only manages cache
+    /// validity. They are separate because the engine module is reached through JS.
+    pub fn set_world(&mut self, seed: u64, version: i32, dimension: i32) -> bool {
+        self.cache.set_world(World {
+            seed,
+            version,
+            dimension,
+        })
+    }
+
+    /// Tiles overlapping the viewport that are not yet cached, as a flat
+    /// `[tx, tz, tx, tz, ...]` array — flat because returning a `Vec<TileKey>` across the
+    /// boundary would need serialisation for no benefit.
+    ///
+    /// The scale is carried in each key but is uniform for a request, so it is not
+    /// repeated in the output.
+    pub fn tiles_to_fetch(
+        &self,
+        min_x: i32,
+        min_z: i32,
+        max_x: i32,
+        max_z: i32,
+        scale: i32,
+    ) -> Vec<i32> {
+        let wanted = tiles_for_viewport(min_x, min_z, max_x, max_z, scale);
+        self.cache
+            .missing(&wanted)
+            .iter()
+            .flat_map(|k| [k.tx, k.tz])
+            .collect()
+    }
+
+    /// Store a generated tile. `data` must be exactly `TILE_CELLS * TILE_CELLS` entries.
+    ///
+    /// Returns false and stores nothing on a length mismatch — a short buffer would
+    /// otherwise be read as valid biome data with garbage past the end.
+    pub fn store_tile(&mut self, tx: i32, tz: i32, scale: i32, data: &[i32]) -> bool {
+        let expected = (TILE_CELLS * TILE_CELLS) as usize;
+        if data.len() != expected {
+            return false;
+        }
+        self.cache.put(TileKey { tx, tz, scale }, data.to_vec());
+        true
+    }
+
+    /// Biome id at a block coordinate, or [`NO_BIOME`] if its tile is not cached.
+    pub fn biome_at(&mut self, x: i32, z: i32, scale: i32) -> i32 {
+        let key = tiles::tile_for_block(x, z, scale);
+        let Some(idx) = index_in_tile(&key, x, z) else {
+            return NO_BIOME;
+        };
+        match self.cache.get(&key) {
+            Some(data) => data.get(idx).copied().unwrap_or(NO_BIOME),
+            None => NO_BIOME,
+        }
+    }
+
+    /// Cells along a tile edge, so JS can size its `gen_biomes` request without hardcoding.
+    #[wasm_bindgen(getter)]
+    pub fn tile_cells(&self) -> i32 {
+        TILE_CELLS
+    }
+
+    /// Block coordinate of a tile's north-west corner, as `[x, z]` — what JS passes to
+    /// `gen_biomes` as the region origin.
+    pub fn tile_origin_block(&self, tx: i32, tz: i32, scale: i32) -> Vec<i32> {
+        let (x, z) = TileKey { tx, tz, scale }.origin_block();
+        vec![x, z]
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn cached_tiles(&self) -> usize {
+        self.cache.len()
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn hits(&self) -> u64 {
+        self.cache.hits
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn misses(&self) -> u64 {
+        self.cache.misses
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn evictions(&self) -> u64 {
+        self.cache.evictions
+    }
 }

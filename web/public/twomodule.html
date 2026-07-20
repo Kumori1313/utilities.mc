@@ -1,0 +1,130 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>utilities.mc — Part 6 two-module check</title>
+<style>
+  body { font: 14px/1.5 system-ui, sans-serif; max-width: 52rem; margin: 2rem auto; padding: 0 1rem; }
+  #status { padding: .5rem .75rem; margin: 1rem 0; background: #0001; }
+  .err { color: #b00; white-space: pre-wrap; }
+  .ok { color: #070; }
+  table { border-collapse: collapse; margin-top: 1rem; }
+  th, td { text-align: left; padding: .3rem .7rem; border-bottom: 1px solid #ccc; }
+  code { background: #0001; padding: .1rem .3rem; }
+</style>
+
+<h1>Part 6 — two modules, one page</h1>
+<p>
+  Loads the Emscripten <code>cubiomes.js</code> and the wasm-bindgen <code>app.js</code>
+  side by side, then runs the real tile loop: ask Rust which tiles are missing, generate
+  them with <code>gen_biomes</code>, hand them back, and query through the cache.
+</p>
+<p>
+  The check that matters is the last column: every cached lookup must equal a direct
+  <code>get_biome_at</code> for the same block. If the tile indexing or the buffer copy is
+  off by anything, these diverge.
+</p>
+
+<div id="status">loading…</div>
+<div id="out"></div>
+
+<script type="module">
+const status = document.getElementById('status');
+const out = document.getElementById('out');
+const fail = (m) => { status.innerHTML = `<span class="err">${m}</span>`; throw new Error(m); };
+
+let engine, View, initApp;
+try {
+  const { default: createCubiomes } = await import('./wasm/cubiomes.js');
+  const Module = await createCubiomes();
+  engine = {
+    setWorld:  Module.cwrap('set_world', 'number', ['number','number','number']),
+    at:        Module.cwrap('get_biome_at', 'number', ['number','number','number','number']),
+    bufSize:   Module.cwrap('biome_buffer_size', 'number', ['number','number','number','number']),
+    gen:       Module.cwrap('gen_biomes', 'number', ['number','number','number','number','number','number','number','number']),
+    str2mc:    Module.cwrap('str2mc', 'number', ['string']),
+    biome2str: Module.cwrap('biome2str', 'string', ['number','number']),
+    M: Module,
+  };
+
+  // Both modules are ES modules but load independently — the Emscripten one is not a
+  // dependency of the wasm-bindgen one. Order only matters if Rust reaches out to
+  // `window`, which this design deliberately avoids.
+  const app = await import('./app/app.js');
+  initApp = app.default;
+  await initApp();
+  View = app.View;
+} catch (e) {
+  fail(`failed to load a module:\n${e}\n\nServe over HTTP, and run scripts/build-all.sh first ` +
+       `so web/public/app/ exists:\n  python3 -m http.server -d web/public 8000`);
+}
+
+const SEED = 1n, VER = '1.21.3', SCALE = 4;
+const mc = engine.str2mc(VER);
+if (mc < 0) fail(`unknown version ${VER}`);
+if (engine.setWorld(BigInt.asUintN(64, SEED), mc, 0) !== 0) fail('engine set_world failed');
+
+const view = new View(256);
+view.set_world(BigInt.asUintN(64, SEED), mc, 0);
+
+const N = view.tile_cells;
+const [minX, minZ, maxX, maxZ] = [-600, -600, 600, 600];
+
+// 1. Which tiles does Rust still need?
+const need = view.tiles_to_fetch(minX, minZ, maxX, maxZ, SCALE);
+const tileCount = need.length / 2;
+
+// 2. Generate each one with a single gen_biomes call, copy out of the Emscripten heap.
+const bufLen = engine.bufSize(SCALE, N, 1, N);
+if (bufLen < 0) fail('biome_buffer_size failed');
+const ptr = engine.M._malloc(bufLen * 4);
+let generated = 0;
+for (let i = 0; i < need.length; i += 2) {
+  const [tx, tz] = [need[i], need[i + 1]];
+  const [ox, oz] = view.tile_origin_block(tx, tz, SCALE);
+  // gen_biomes takes CELL coords when scale is 4, so convert the block origin back.
+  const rc = engine.gen(SCALE, ox / SCALE, 16, oz / SCALE, N, 1, N, ptr);
+  if (rc !== 0) fail(`gen_biomes failed for tile ${tx},${tz} (rc=${rc})`);
+  const cells = engine.M.HEAP32.subarray(ptr >> 2, (ptr >> 2) + N * N);
+  if (!view.store_tile(tx, tz, SCALE, cells)) fail(`store_tile rejected tile ${tx},${tz}`);
+  generated++;
+}
+engine.M._free(ptr);
+
+// 3. Nothing should be missing now.
+const stillMissing = view.tiles_to_fetch(minX, minZ, maxX, maxZ, SCALE).length / 2;
+
+// 4. The real check: cached lookups vs direct point queries.
+let checked = 0, mismatched = 0;
+const rows = [];
+for (let x = minX; x <= maxX; x += 37) {
+  for (let z = minZ; z <= maxZ; z += 41) {
+    const cached = view.biome_at(x, z, SCALE);
+    const direct = engine.at(SCALE, Math.floor(x / SCALE), 16, Math.floor(z / SCALE));
+    checked++;
+    if (cached !== direct) {
+      mismatched++;
+      if (rows.length < 8) rows.push([x, z, cached, direct]);
+    }
+  }
+}
+
+const okAll = mismatched === 0 && stillMissing === 0;
+status.innerHTML = okAll
+  ? `<span class="ok">✓ both modules loaded; ${checked} cached lookups all match direct queries</span>`
+  : `<span class="err">✗ ${mismatched}/${checked} mismatches, ${stillMissing} tiles still missing</span>`;
+
+out.innerHTML = `
+<table>
+  <tr><th>tiles generated</th><td>${generated}</td></tr>
+  <tr><th>tiles still missing</th><td>${stillMissing}</td></tr>
+  <tr><th>cells per tile</th><td>${N} × ${N}</td></tr>
+  <tr><th>buffer size (ints)</th><td>${bufLen}</td></tr>
+  <tr><th>lookups checked</th><td>${checked}</td></tr>
+  <tr><th>mismatches</th><td>${mismatched}</td></tr>
+  <tr><th>cache hits / misses</th><td>${view.hits} / ${view.misses}</td></tr>
+  <tr><th>evictions</th><td>${view.evictions}</td></tr>
+  <tr><th>biome at 100,64,100</th><td>${engine.biome2str(mc, view.biome_at(100, 100, SCALE))}</td></tr>
+</table>
+${rows.length ? '<h3>first mismatches</h3><table><tr><th>x</th><th>z</th><th>cached</th><th>direct</th></tr>' +
+  rows.map(r => `<tr><td>${r[0]}</td><td>${r[1]}</td><td>${r[2]}</td><td>${r[3]}</td></tr>`).join('') + '</table>' : ''}
+`;
+</script>
