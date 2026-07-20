@@ -1,0 +1,131 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>utilities.mc — Part 3b spike</title>
+<style>
+  body { font: 14px/1.5 system-ui, sans-serif; max-width: 46rem; margin: 2rem auto; padding: 0 1rem; }
+  label { display: inline-block; margin-right: 1rem; }
+  input { font: inherit; width: 11rem; }
+  input[size="6"] { width: 4.5rem; }
+  table { border-collapse: collapse; margin-top: 1rem; width: 100%; }
+  th, td { text-align: left; padding: .35rem .6rem; border-bottom: 1px solid #ccc; }
+  code { background: #0001; padding: .1rem .3rem; }
+  #status { padding: .5rem .75rem; margin: 1rem 0; background: #0001; }
+  .err { color: #b00; white-space: pre-wrap; }
+</style>
+
+<h1>Part 3b — Cubiomes WASM spike</h1>
+<p>
+  Go/no-go check: loads <code>cubiomes.js</code> (Emscripten) from plain HTML and calls
+  <code>get_biome_at</code>. A sane biome name here means the hardest technical risk in
+  the project is retired.
+</p>
+
+<div id="status">loading module…</div>
+
+<div>
+  <label>seed <input id="seed" value="1"></label>
+  <label>version <input id="ver" value="1.21.3" size="8"></label>
+</div>
+<div style="margin-top:.5rem">
+  <label>x <input id="x" value="100" size="6"></label>
+  <label>y <input id="y" value="64" size="6"></label>
+  <label>z <input id="z" value="100" size="6"></label>
+  <label>scale
+    <select id="scale">
+      <option value="1" selected>1 — block coords</option>
+      <option value="4">4 — biome coords (block/4)</option>
+    </select>
+  </label>
+  <button id="go">query</button>
+</div>
+
+<table>
+  <thead><tr><th>seed</th><th>coords</th><th>scale</th><th>biome id</th><th>biome</th></tr></thead>
+  <tbody id="rows"></tbody>
+</table>
+
+<p style="margin-top:1.5rem; color:#666">
+  <strong>Validate against ground truth.</strong> Look the same seed + coordinate up on
+  Chunkbase <em>for the same version</em> and confirm the biome matches. Symbol presence
+  is not correctness — an off-by-one in coordinates, a wrong dimension, or a version
+  mismatch all still produce plausible-looking output.
+</p>
+
+<script type="module">
+const status = document.getElementById('status');
+const rows = document.getElementById('rows');
+
+let getBiomeAt, str2mc, biome2str;
+
+try {
+  const { default: createCubiomesModule } = await import('./wasm/cubiomes.js');
+  const Module = await createCubiomesModule();
+
+  // Flat C ABI across the boundary — scalars and strings only (Part 5).
+  getBiomeAt = Module.cwrap('get_biome_at', 'number',
+                            ['number', 'number', 'number', 'number', 'number', 'number']);
+  str2mc     = Module.cwrap('str2mc',     'number', ['string']);
+  biome2str  = Module.cwrap('biome2str',  'string', ['number', 'number']);
+
+  status.textContent = 'module loaded ✓';
+} catch (e) {
+  status.innerHTML = `<span class="err">failed to load module:\n${e}\n\n` +
+    `Serve over HTTP (ES modules + wasm won't load from file://):\n` +
+    `  npx serve web/public   →  http://localhost:3000/spike.html</span>`;
+  throw e;
+}
+
+function query() {
+  const verStr = document.getElementById('ver').value.trim();
+  const mc = str2mc(verStr);
+  if (mc < 0) { status.innerHTML = `<span class="err">unknown version: ${verStr}</span>`; return; }
+
+  // seed is `unsigned long long` in C. This Emscripten defaults to WASM_BIGINT, so the
+  // i64 parameter must be given a JS BigInt — passing a Number throws
+  // "Cannot convert N to a BigInt" and nothing renders. asUintN also lets the usual
+  // signed seeds (e.g. -4172144997902289642) map onto the unsigned parameter.
+  const seedStr = document.getElementById('seed').value.trim();
+  let seed;
+  try {
+    seed = BigInt.asUintN(64, BigInt(seedStr));
+  } catch {
+    status.innerHTML = `<span class="err">seed must be an integer: ${seedStr}</span>`;
+    return;
+  }
+
+  const x = +document.getElementById('x').value;
+  const y = +document.getElementById('y').value;
+  const z = +document.getElementById('z').value;
+
+  // scale=1 means x/y/z are block coordinates — what the labels above imply and what
+  // you compare against Chunkbase. scale=4 reads them as biome coords (block/4), which
+  // is the cheap path for map tiles but queries 4x further out for the same numbers.
+  const scale = +document.getElementById('scale').value;
+
+  const id = getBiomeAt(seed, mc, scale, x, y, z);
+  if (id < 0) {
+    status.innerHTML = `<span class="err">query failed (scale must be 1 or 4; got ${scale})</span>`;
+    return;
+  }
+  const name = biome2str(mc, id) ?? '(unknown)';
+
+  const tr = rows.insertRow(0);
+  tr.innerHTML = `<td>${seedStr}</td><td>${x}, ${y}, ${z}</td><td>${scale}</td>` +
+                 `<td>${id}</td><td><strong>${name}</strong></td>`;
+  status.textContent = `${verStr} (mc=${mc}) scale=${scale} → ${name} [${id}]`;
+}
+
+// Surface failures in the page. Without this a throw inside the handler is
+// console-only, which looks exactly like "the button does nothing".
+function safeQuery() {
+  try {
+    query();
+  } catch (e) {
+    status.innerHTML = `<span class="err">query failed:\n${e}</span>`;
+    throw e;
+  }
+}
+
+document.getElementById('go').addEventListener('click', safeQuery);
+safeQuery();
+</script>

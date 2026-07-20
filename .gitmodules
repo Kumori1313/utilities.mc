@@ -1,0 +1,3 @@
+[submodule "engine/cubiomes"]
+	path = engine/cubiomes
+	url = https://github.com/Cubitect/cubiomes
