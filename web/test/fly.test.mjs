@@ -60,11 +60,40 @@ ok('unrelated keys return null', flyDelta(K('KeyQ', 'Enter'), c, dt) === null);
 ok('ArrowUp matches W', flyDelta(K('ArrowUp'), c, dt).distanceTo(w) < 1e-9);
 ok('ArrowRight matches D', flyDelta(K('ArrowRight'), c, dt).distanceTo(d) < 1e-9);
 
-// Straight down must not produce NaN — the degenerate case for a flattened forward.
+// --- looking straight down: the degenerate case for a flattened forward ---
+//
+// This originally only asserted the delta was finite and non-zero. It passed while the code
+// fell back to a FIXED world axis, so W moved the same compass direction no matter which way
+// the camera was turned — smooth, finite, and wrong. Finiteness was never the property that
+// mattered; direction was.
 const down = cam(0, -Math.PI / 2);
 const dd = flyDelta(K('KeyW'), down, dt);
 ok('looking straight down yields a finite delta',
    dd && Number.isFinite(dd.x) && Number.isFinite(dd.z) && dd.length() > 0, `got ${dd?.toArray()}`);
+
+// Screen-up maps to a world direction even when the view direction is vertical; W must follow
+// it, so that yawing the camera yaws the movement.
+for (const yaw of [0, Math.PI / 2, Math.PI, -Math.PI / 4, 2.3]) {
+  const c2 = cam(yaw, -Math.PI / 2);
+  const want = new THREE.Vector3(0, 1, 0).applyQuaternion(c2.quaternion).setY(0).normalize();
+  const got = flyDelta(K('KeyW'), c2, dt).clone().setY(0).normalize();
+  ok(`straight down, yaw ${yaw.toFixed(2)}: W follows screen-up`,
+     got.distanceTo(want) < 1e-6, `got ${got.toArray().map(n => n.toFixed(3))} want ${want.toArray().map(n => n.toFixed(3))}`);
+}
+
+// The decisive property: two different yaws must give two different movement directions.
+const d0 = flyDelta(K('KeyW'), cam(0, -Math.PI / 2), dt).clone().setY(0).normalize();
+const d90 = flyDelta(K('KeyW'), cam(Math.PI / 2, -Math.PI / 2), dt).clone().setY(0).normalize();
+ok('straight down: yaw changes the direction of travel', d0.distanceTo(d90) > 0.5,
+   `yaw 0 -> ${d0.toArray().map(n => n.toFixed(3))}, yaw 90 -> ${d90.toArray().map(n => n.toFixed(3))}`);
+
+// A/D must stay perpendicular to W and keep their handedness in this pose too.
+const dnA = flyDelta(K('KeyA'), down, dt).clone().setY(0).normalize();
+const dnD = flyDelta(K('KeyD'), down, dt).clone().setY(0).normalize();
+const dnW = dd.clone().setY(0).normalize();
+ok('straight down: D is perpendicular to W', Math.abs(dnD.dot(dnW)) < 1e-6);
+ok('straight down: A is opposite D', dnA.clone().add(dnD).length() < 1e-6);
+ok('straight down: D is still the camera\'s right', dnW.clone().cross(dnD).y < 0);
 
 // Altitude scaling, and its floor.
 const hi = flyDelta(K('KeyW'), cam(0, -0.6, 2000), dt).length();

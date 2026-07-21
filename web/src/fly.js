@@ -8,6 +8,7 @@ import * as THREE from 'three';
 
 const fwd = new THREE.Vector3();
 const right = new THREE.Vector3();
+const camUp = new THREE.Vector3();
 
 /// Movement delta for the currently held keys, or null if none of them move the camera.
 ///
@@ -28,7 +29,20 @@ export function flyDelta(keys, camera, dt, out = new THREE.Vector3()) {
   // terrain — the normal way to use this map — does not reduce W to a crawl.
   camera.getWorldDirection(fwd);
   fwd.y = 0;
-  if (fwd.lengthSq() < 1e-6) fwd.set(0, 0, -1); // camera pointing straight down
+
+  // Looking straight down, the view direction has NO horizontal component, so flattening it
+  // leaves nothing to steer by. Fall back to the camera's own up vector, which is horizontal
+  // in that pose and points at the top of the screen — the direction a user reads as
+  // "forward" when looking at a map from directly above.
+  //
+  // A fixed world axis here (the original -Z) is wrong in a way that is easy to miss: it
+  // still produces smooth, finite movement, just always in the same compass direction no
+  // matter which way the camera is turned. Testing this case only for NaN passes it happily.
+  if (fwd.lengthSq() < 1e-6) {
+    camUp.set(0, 1, 0).applyQuaternion(camera.quaternion);
+    camUp.y = 0;
+    fwd.copy(camUp.lengthSq() < 1e-6 ? camUp.set(0, 0, -1) : camUp);
+  }
   fwd.normalize();
   right.crossVectors(fwd, camera.up).normalize();
 
