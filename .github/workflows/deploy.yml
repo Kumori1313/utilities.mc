@@ -34,10 +34,15 @@ jobs:
         with:
           submodules: recursive
 
+      # Tracks the current release rather than an old pin. The first deploy pinned 3.1.64,
+      # which predates WASM_BIGINT becoming the default and so produced a different i64 ABI
+      # from local builds — a working map locally and a dead one when deployed. build.sh now
+      # sets WASM_BIGINT explicitly and asserts it, so the ABI no longer depends on this
+      # version; keeping it current simply avoids drifting from the dev toolchain again.
       - name: Install Emscripten
         uses: mymindstorm/setup-emsdk@v14
         with:
-          version: 3.1.64
+          version: latest
           actions-cache-folder: emsdk-cache
 
       - name: Install Rust (wasm32 target)
