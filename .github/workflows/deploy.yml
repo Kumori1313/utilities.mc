@@ -1,0 +1,92 @@
+# Build the full pipeline and publish to GitHub Pages (Part 9).
+#
+# The build needs three toolchains — Emscripten for the Cubiomes engine, Rust with the
+# wasm32-unknown-unknown target for the app crate, and wasm-pack to bind it — which is why
+# this is a full CI build rather than a "point a host at the repo" deploy. scripts/build-all.sh
+# is the same script used locally, so CI and local builds cannot drift.
+#
+# No COOP/COEP headers are needed: the engine is built without pthreads, so nothing here uses
+# SharedArrayBuffer. That is what makes Pages viable at all — it cannot set custom headers.
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Let a running deploy finish rather than cancelling it midway, but keep only one queued.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Emscripten
+        uses: mymindstorm/setup-emsdk@v14
+        with:
+          version: 3.1.64
+          actions-cache-folder: emsdk-cache
+
+      - name: Install Rust (wasm32 target)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            app/target
+            crates/enchant/target
+          key: cargo-${{ runner.os }}-${{ hashFiles('app/Cargo.lock', 'crates/enchant/Cargo.lock') }}
+
+      - name: Install wasm-pack
+        uses: jetli/wasm-pack-action@v0.4.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install web dependencies
+        working-directory: web
+        run: npm ci
+
+      # Guards the enchantment tables and the anvil/optimiser proofs. A deploy that ships a
+      # calculator whose own tests fail is worse than a deploy that does not happen.
+      - name: Test the enchant crate
+        run: cargo test --manifest-path crates/enchant/Cargo.toml
+
+      - name: Build engine, app and web
+        run: ./scripts/build-all.sh
+
+      # enablement turns Pages on for the repo if it is not already, so this needs no manual
+      # setup step in the repo settings.
+      - uses: actions/configure-pages@v5
+        with:
+          enablement: true
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: web/dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

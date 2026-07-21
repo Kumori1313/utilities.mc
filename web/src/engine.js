@@ -15,12 +15,19 @@ export const SCALE = 4; // gen_heights is fixed at 1:4; tiles match it.
 // SERVED, not bundled. They must therefore be imported at runtime: a static import would
 // make Rollup try to resolve them at build time and fail, since they may not exist yet
 // when the frontend is built. `@vite-ignore` tells Vite to leave the specifier alone.
-const load = (path) => import(/* @vite-ignore */ new URL(path, location.origin).href);
+//
+// Resolve against BASE_URL, not `location.origin`. Because `@vite-ignore` opts these out of
+// Vite's rewriting, they are the one place the deploy base has to be applied by hand — and a
+// root-absolute path silently works in dev (base "/") while 404-ing on GitHub Pages, which
+// serves this project at /utilities.mc/. BASE_URL always carries a trailing slash, so `path`
+// is relative here.
+const load = (path) =>
+  import(/* @vite-ignore */ new URL(`${import.meta.env.BASE_URL}${path}`, location.origin).href);
 
 export async function boot() {
   const [{ default: createCubiomes }, app] = await Promise.all([
-    load('/wasm/cubiomes.js'),
-    load('/app/app.js'),
+    load('wasm/cubiomes.js'),
+    load('app/app.js'),
   ]);
   const initApp = app.default;
   const View = app.View;
