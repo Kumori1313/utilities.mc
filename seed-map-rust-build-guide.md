@@ -1220,10 +1220,22 @@ Ruled out, each by direct test rather than argument:
 - **Not version drift.** Both are byte-identical and viable across 1.20.6, 1.21.1, 1.21.3 and
   1.21_WD.
 - **Not the region or box-scan math**, which is separately tested against brute force.
-- **Not terrain, on the evidence available.** The trail ruin sits on a 69-block height spread
-  (a cliff) and the pyramid at a mean y of 64, which is suggestive — but ~7% of *villages* are
-  equally rough and ~30% are equally low, and villages verify correctly. A terrain rule that
-  explained these two would reject many structures that genuinely exist.
+- **Terrain — initially dismissed, on reasoning that was wrong.** The first pass rejected it by
+  observing that ~7% of *villages* sit on equally rough ground and ~30% equally low, "and
+  villages verify correctly". That comparison is invalid: only **three** villages were ever
+  checked, none of them low-lying, so it says nothing about the 166 low ones. Treating a
+  property of an unexamined population as verified is precisely the error this guide keeps
+  warning about, and it was made here.
+
+  With a third data point the terrain signal is strong. Ranking all 29 viable desert pyramids
+  within ~12k blocks by terrain height at their position: the two Chunkbase does **not** show
+  rank 2nd (y=59) and 6th (y=65); the one it does show ranks 27th (y=80). Sea level is 63. In
+  1.18+ biome assignment and terrain height are separate noise systems, so a column can be
+  "desert" by biome while its terrain sits at or below sea level — underwater, where no pyramid
+  generates. Cubiomes checks only the biome and so calls it viable.
+
+  **This is a hypothesis with a falsifiable prediction, not a conclusion**: low-lying candidates
+  should be absent and high ones present. Test it before acting on it.
 
 What remains is the documented scope of the check itself: finders.h describes
 `isViableStructurePos` as performing *"a biome check ... to determine whether a structure
