@@ -28,7 +28,11 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
+      # Cubiomes is a submodule (pinned at e61f905) and checkout skips submodules by default,
+      # so without this the engine build fails immediately on a fresh clone.
       - uses: actions/checkout@v4
+        with:
+          submodules: recursive
 
       - name: Install Emscripten
         uses: mymindstorm/setup-emsdk@v14
