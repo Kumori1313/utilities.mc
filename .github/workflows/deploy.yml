@@ -78,6 +78,12 @@ jobs:
       - name: Test the enchant crate
         run: cargo test --manifest-path crates/enchant/Cargo.toml
 
+      # Flight movement math (12.5): handedness and diagonal normalisation cannot be confirmed
+      # by reading, and there is no browser here to fly.
+      - name: Test the frontend
+        working-directory: web
+        run: npm test
+
       - name: Build engine, app and web
         run: ./scripts/build-all.sh
 
