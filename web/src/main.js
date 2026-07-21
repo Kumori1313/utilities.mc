@@ -42,8 +42,9 @@ function loadWorld(seedText, x, z) {
   map3d.setWorld(seedText, x, z);
 }
 
-// Structure overlay (2D only for now — the 3D view has no marker path yet). Types start off
-// so a first load pays no scan cost, and each is verified independently.
+// Structure overlay (2D only for now — the 3D view has no marker path yet). All four types
+// are confirmed against Chunkbase on seed 1 / 1.21.3; they start off so a first load pays no
+// scan cost.
 $('struct-list').innerHTML = STRUCTURE_TYPES.map((t) =>
   `<label class="chk"><input type="checkbox" data-struct="${t.id}">` +
   `<span class="swatch" style="background:${t.color}"></span>${t.label}</label>`).join('');
@@ -87,7 +88,13 @@ function setMode(mode) {
 }
 
 // --- controls ---------------------------------------------------------------
-$('go').addEventListener('click', () => loadWorld($('seed').value, +$('cx').value | 0, +$('cz').value | 0));
+const submit = () => loadWorld($('seed').value, +$('cx').value | 0, +$('cz').value | 0);
+$('go').addEventListener('click', submit);
+// Enter from any of the three fields loads, so the common path never needs the mouse. These
+// are bare inputs rather than a <form>, which would give this for free — hence doing it here.
+for (const id of ['seed', 'cx', 'cz']) {
+  $(id).addEventListener('keydown', (e) => { if (e.key === 'Enter') submit(); });
+}
 
 document.querySelectorAll('#map-mode button').forEach((b) =>
   b.addEventListener('click', () => setMode(b.dataset.mode)));

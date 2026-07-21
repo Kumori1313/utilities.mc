@@ -176,6 +176,19 @@ export function create2D({ canvas, engine, palette, mcVersion, ui, structures })
     ctx.drawImage(tile.canvas, 0, 0, TILE_CELLS, TILE_CELLS, x0, y0, x1 - x0, y1 - y0);
   }
 
+  /// Relative luminance (0..1) of the biome colour at the view centre, or 0 (treat as dark)
+  /// if that tile is not generated yet. Rec. 601 weights, which approximate how the eye
+  /// weights the channels — a plain RGB average would call saturated green too dark.
+  function centreLuma(scale) {
+    const cellX = Math.floor(cx / scale), cellZ = Math.floor(cz / scale);
+    const tx = Math.floor(cellX / TILE_CELLS), tz = Math.floor(cellZ / TILE_CELLS);
+    const tile = tiles.get(tileKey(scale, tx, tz));
+    if (!tile) return 0;
+    const id = tile.ids[(cellZ - tz * TILE_CELLS) * TILE_CELLS + (cellX - tx * TILE_CELLS)];
+    const p = id >= 0 && id < 256 ? id * 3 : 0;
+    return (0.299 * palette[p] + 0.587 * palette[p + 1] + 0.114 * palette[p + 2]) / 255;
+  }
+
   /// Overlay structure markers for the enabled types. Scanning shares the frame budget with
   /// tile generation, and unscanned ground schedules another frame rather than stalling this
   /// one — the same progressive fill the tiles use.
@@ -249,12 +262,20 @@ export function create2D({ canvas, engine, palette, mcVersion, ui, structures })
 
     drawMarkers(w, h);
 
-    // Centre crosshair, so the coordinate readout has a visible anchor.
-    ctx.strokeStyle = '#ffffff88';
-    ctx.lineWidth = 1;
+    // Centre crosshair, so the coordinate readout has a visible anchor. Its colour adapts to
+    // the biome underneath — a white cross disappears on snow and ice, a dark one on deep
+    // ocean — and it carries a halo in the opposite tone so it survives the mid-tones too.
+    // The luma comes from the cached tile rather than a getImageData readback, which would
+    // stall the pipeline every frame for a single pixel.
+    const light = centreLuma(scale) > 0.55;
     ctx.beginPath();
     ctx.moveTo(w / 2 - 6, h / 2); ctx.lineTo(w / 2 + 6, h / 2);
     ctx.moveTo(w / 2, h / 2 - 6); ctx.lineTo(w / 2, h / 2 + 6);
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = light ? '#ffffffcc' : '#000000aa';
+    ctx.stroke();
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = light ? '#000000' : '#ffffff';
     ctx.stroke();
 
     const pending = missing.length - generated;

@@ -953,8 +953,16 @@ treatment.
 - [ ] **Render markers in both modes.** 2D: icons/dots on the canvas at the projected position.
       3D: sprites or billboards at the structure's world position and surface height. Label on
       hover; show the coordinate.
-- [ ] Start with a small, high-value set (village, stronghold, ocean monument, mansion) rather
+- [x] Start with a small, high-value set (village, stronghold, ocean monument, mansion) rather
       than all eleven types at once — each additional type is more verification surface.
+      **All four confirmed against Chunkbase on seed 1 / 1.21.3.** Widening the set is 12.6.
+- [x] **Landmine found in the doing — `nextStronghold`'s own doc comment is wrong.** finders.h
+      describes the return as "the number of further strongholds after this one", but the
+      implementation increments `index` before returning `128 - (index-1)`, which is the count
+      *including* the one just resolved. Recording the position and then testing the return, as
+      that wording invites, yields a phantom 129th stronghold — plausible position, plausible
+      ring distance, no duplicate, nothing to mark it as junk. Test the return **before** using
+      the position. Vendored doc comments are not ground truth; the count is (128 for MC >= 1.9).
 
 ## 12.5 — WASD / arrow-key flight (3D)
 
@@ -1154,3 +1162,83 @@ version-independent merely because it currently passes for 1.21.3.
       version. Re-run the Chunkbase spot-checks, the external enchantment-calculator comparison,
       and the real-anvil check against each version you offer, and treat any version you have not
       checked as unverified — including in the UI, if you ship it anyway.
+
+## 12.6 — Structure coverage beyond the verified four
+
+12.4 ships four types (village, ocean monument, woodland mansion, stronghold), all confirmed
+against Chunkbase on seed 1 / 1.21.3. Cubiomes exposes **23 usable types** in 1.21.3 — the
+enum's `Feature` is pre-1.13 only — so this is about widening that set deliberately.
+
+The instinct is that per-chunk structures must be ruinously expensive to scan, since their
+region is 1 chunk against a village's 34. **Measured, that is false**, and it is worth
+knowing before designing around it:
+
+| type | region | scan of one 2048-block cell | found |
+|---|---|---|---|
+| Village | 34 chunks | 1.4 ms | 2 |
+| Treasure | 1 chunk | 1.3 ms | 9 |
+| Mineshaft | 1 chunk | 0.3 ms | 83 |
+| Geode | 1 chunk | 0.7 ms | 673 |
+| Ruined_Portal | 40 chunks | 0.0 ms | 13 |
+
+Village costs more than geode despite scanning 1/1000th as many candidates, because its cost
+is the **biome viability check**, not candidate enumeration. Scan cost tracks how expensive a
+type's viability rule is, not how many regions it covers.
+
+- [ ] **The real limits are density and dimension, not cost.** Geodes come in at ~620 per
+      default-zoom viewport; drawn as markers that is noise, not information. Per-chunk types
+      need their own much tighter zoom cutoff, or clustering, or to be left out.
+- [ ] **Landmine — three types are Nether and three are End.** `Ruined_Portal_N`, `Fortress`
+      and `Bastion` are `DIM_NETHER`; `End_City`, `End_Gateway` and `End_Island` are `DIM_END`.
+      `gen_structures` rejects a type whose `sc.dim` does not match the loaded generator, and
+      the map loads the Overworld unconditionally. These six are therefore blocked on a
+      dimension switch — which also means Nether/End biome rendering — not on structure work.
+      Six of the 23 are a *different feature*; do not scope them into this one.
+- [ ] **Each type is a separate verification claim, and that is the actual per-type cost.**
+      `structure_id` is deliberately narrow: adding a name to it asserts that type was checked
+      against Chunkbase for the pinned version. Widen it one type at a time, verifying each,
+      rather than pasting the enum in and assuming the shared code path makes them all correct.
+      Placement rules differ per type, so a shared path proves nothing about any single one.
+- [ ] Prefer the types a player actually navigates to — outpost, desert pyramid, jungle temple,
+      swamp hut, igloo, ancient city, trail ruins, trial chambers, shipwreck, ruined portal —
+      over the ambient ones (geode, desert well, mineshaft) that mainly add clutter.
+
+## 12.7 — Nearest-structure locator
+
+Find the N nearest structures of a chosen type and draw a line to each from the view centre.
+Depends on 12.4's cache; the search is the interesting part.
+
+- [ ] **Landmine — stopping as soon as N are found gives wrong answers.** Scanning outward in
+      square rings of grid cells and halting on the Nth hit is the obvious implementation and
+      it is incorrect: a structure in the next unscanned ring can be nearer than one found in
+      the *corner* of a ring already scanned. Keep expanding until the nearest possible point
+      of the next ring is farther than the current Nth-best distance, then stop. This is the
+      one part of the feature that can be confidently wrong.
+- [ ] **Landmine — strongholds are not returned in distance order.** `gen_strongholds` yields
+      ring order, which is only loosely distance order: on seed 1 the first three sit at 1809,
+      1871 and 1416 blocks. Sort by actual distance rather than taking the first N. The upside
+      is that all 128 are already cached, so nearest-N for strongholds needs no search at all.
+- [ ] Cap the search radius and report honestly when it is hit ("none within N blocks") rather
+      than silently returning fewer than asked. An empty result and a truncated search look the
+      same to the user otherwise.
+- [ ] Reuse the 12.4 grid cache for the search, and respect the same frame budget — a wide
+      search is many cells, and it must not block the UI any more than a pan does.
+- [ ] **Draw lines in screen space, and handle targets off-screen.** The nearest match is
+      usually outside the viewport at useful zooms. Clamp the line to the canvas edge with a
+      distance label rather than drawing to coordinates far outside it. Show the block distance
+      and the target coordinate; that is the number the user actually wants.
+- [ ] Let the user pick N (e.g. 1, 4, 8). Keep the selection stable while panning so the lines
+      do not re-target on every frame — recompute on demand or when the centre moves past a
+      threshold, not continuously.
+
+## 12.8 — Map interaction polish
+
+Small fixes to the 2D map, done alongside 12.4.
+
+- [x] **Enter loads.** The seed and x/z fields respond to Enter, not just the load button.
+      They are bare inputs rather than a `<form>`, which would have given this for free.
+- [x] **Adaptive crosshair.** The centre crosshair took its colour from a fixed white, which
+      disappears against snow, ice and desert. It now picks ink from the Rec. 601 luma of the
+      biome beneath it and carries a halo in the opposite tone, so it survives mid-tones too.
+      The luma is read from the cached tile, not a `getImageData` readback, which would stall
+      the pipeline every frame to sample a single pixel.
