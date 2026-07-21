@@ -26,9 +26,11 @@
       </div>
       <p class="version">World generation differs between versions, so this map is only
         correct for the pinned one.</p>
-      <label>seed <input id="seed" value="1" spellcheck="false"></label>
-      <label>x <input id="cx" value="0" size="7"></label>
-      <label>z <input id="cz" value="0" size="7"></label>
+      <label class="fld">seed <input id="seed" value="1" spellcheck="false"></label>
+      <div class="coords">
+        <label class="fld">x <input id="cx" value="0" inputmode="numeric"></label>
+        <label class="fld">z <input id="cz" value="0" inputmode="numeric"></label>
+      </div>
       <button id="go">load</button>
       <label id="rdist-wrap" class="hidden">render distance
         <input id="rdist" type="range" min="1" max="8" value="3">

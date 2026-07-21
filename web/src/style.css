@@ -49,6 +49,13 @@ body { font: 13px/1.5 system-ui, sans-serif; color: #e6e8ee; display: flex; flex
 #rdist { width: 8rem; }
 #rdist-val { font-variant-numeric: tabular-nums; color: #cbd2e6; }
 
+/* seed-map inputs: seed full width, x/z side by side and compact, load underneath */
+#panel .fld { width: 100%; margin: 0 0 .55rem; }
+#panel .fld input { width: 100%; min-width: 0; }
+#panel .coords { display: flex; gap: .55rem; }
+#panel .coords .fld { flex: 1; }
+#panel #go { width: 100%; margin-top: 0; }
+
 /* --- forms (shared by calculators) --- */
 .form-view { max-width: 44rem; margin: 0 auto; }
 h2 { margin: 0 0 .3rem; font-size: 1.15rem; }
@@ -73,21 +80,39 @@ table.slots { border-collapse: collapse; width: 100%; margin-top: .5rem; }
 .slots th { color: var(--muted); font-weight: 500; }
 .slots tr.empty td { color: #6b7180; }
 
-.anvil { display: grid; grid-template-columns: 1fr 1fr; gap: 1.2rem; margin-top: .5rem; }
-.anvil > div { display: flex; flex-direction: column; gap: .5rem;
-  padding: .8rem; border: 1px solid var(--line); border-radius: .5rem; background: #ffffff08; }
-.anvil label { width: 100%; }
-.anvil input { width: 100%; min-width: 0; }
-.side-title { font-weight: 600; color: #cbd2e6; }
-.rename { flex-direction: row; align-items: center; gap: .4rem; margin: .8rem 0; }
-.rename input { min-width: 0; width: auto; }
+/* inline checkbox label */
+.chk { flex-direction: row; align-items: center; gap: .4rem; }
+.chk input { min-width: 0; width: auto; }
+
+/* anvil planner grid: enchantment rows x tier columns */
+table.egrid { border-collapse: collapse; width: 100%; margin: .3rem 0 .2rem; }
+.egrid th { color: var(--muted); font-weight: 500; font-size: 12px; padding: .25rem .3rem; text-align: center; }
+.egrid th:first-child { text-align: left; }
+.egrid td { border-bottom: 1px solid #ffffff12; }
+.egrid .ename { padding: .25rem .5rem .25rem 0; white-space: nowrap; }
+.egrid .have { display: inline-flex; align-items: center; gap: .2rem; margin-left: .5rem;
+  font-size: 11px; color: var(--muted); }
+.egrid .have input { min-width: 0; width: auto; }
+.tier { width: 2.1rem; text-align: center; padding: .25rem 0; cursor: pointer;
+  color: #8b93a7; user-select: none; border-left: 1px solid #ffffff12; }
+.tier:hover:not(.off):not(.dis) { background: #ffffff14; color: #e6e8ee; }
+.tier.on { background: #6ea8fe33; color: #cfe0ff; font-weight: 600; box-shadow: inset 0 0 0 1px #6ea8fe66; }
+.tier.off { cursor: default; }
+.tier.dis { color: #4a5064; cursor: not-allowed; }
+tr.row-dis .ename { color: #5b6076; }
+tr.row-have .ename { color: #a6e9c4; }
 
 .out { margin-top: .8rem; padding: .7rem .9rem; border-radius: .5rem;
   background: #ffffff0d; border: 1px solid var(--line); }
 .cost { font-size: 1.15rem; font-weight: 600; color: #a6e9c4; }
 .cost.bad { color: #ffb3b3; }
-.rlist { margin-top: .4rem; color: #cbd2e6; }
-.pw { color: var(--muted); margin-left: .8rem; font-size: 12px; }
+.pw { color: var(--muted); font-size: 12px; }
+.warn { margin-top: .5rem; color: #ffd28a; font-size: 12px; }
+.steps { margin-top: .6rem; display: flex; flex-direction: column; gap: .2rem; font-size: 12px; }
+.step { color: #cbd2e6; font-variant-numeric: tabular-nums; }
+.step .op { color: var(--muted); }
+.step .sc { color: #a6e9c4; margin-left: .4rem; }
+.step .sc::before { content: "= "; color: var(--muted); }
 
 /* --- seed map status/stats (unchanged from Part 7) --- */
 #status { margin: .8rem 0 .5rem; padding: .4rem .55rem; border-radius: .3rem; background: #ffffff0d; font-size: 12px; }
