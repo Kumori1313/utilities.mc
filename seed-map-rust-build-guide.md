@@ -1200,9 +1200,46 @@ type's viability rule is, not how many regions it covers.
       against Chunkbase for the pinned version. Widen it one type at a time, verifying each,
       rather than pasting the enum in and assuming the shared code path makes them all correct.
       Placement rules differ per type, so a shared path proves nothing about any single one.
-- [ ] Prefer the types a player actually navigates to — outpost, desert pyramid, jungle temple,
+- [x] Prefer the types a player actually navigates to — outpost, desert pyramid, jungle temple,
       swamp hut, igloo, ancient city, trail ruins, trial chambers, shipwreck, ruined portal —
       over the ambient ones (geode, desert well, mineshaft) that mainly add clutter.
+
+### Known discrepancy — `isViableStructurePos` is a biome check, nothing more
+
+Spot-checking the eleven new types against Chunkbase (seed 1 / 1.21.3, nearest three of each)
+matched on 31 of 33 positions. Two did not: a desert pyramid at (-416, 10416) and a trail ruin
+at (-336, -1552), both of which this tool reports and Chunkbase does not.
+
+Ruled out, each by direct test rather than argument:
+
+- **Not the biome check.** Both positions carry a valid biome for their type at y=319 (what
+  Cubiomes actually samples), at the approximate surface, and at y=63.
+- **Not a position offset.** Enumerating every candidate within 1,200 blocks shows each
+  disputed position is the genuine candidate for its own region, with no near alternative it
+  could have been confused with.
+- **Not version drift.** Both are byte-identical and viable across 1.20.6, 1.21.1, 1.21.3 and
+  1.21_WD.
+- **Not the region or box-scan math**, which is separately tested against brute force.
+- **Not terrain, on the evidence available.** The trail ruin sits on a 69-block height spread
+  (a cliff) and the pyramid at a mean y of 64, which is suggestive — but ~7% of *villages* are
+  equally rough and ~30% are equally low, and villages verify correctly. A terrain rule that
+  explained these two would reject many structures that genuinely exist.
+
+What remains is the documented scope of the check itself: finders.h describes
+`isViableStructurePos` as performing *"a biome check ... to determine whether a structure
+**could** spawn there"*. It is a necessary condition, not a sufficient one. Real generation can
+still decline for reasons Cubiomes does not model, which yields **false positives — structures
+shown that do not exist — but not false negatives**.
+
+- [ ] **Do not "fix" this with a terrain heuristic.** It would trade a small, measured
+      false-positive rate for an unmeasured false-negative rate, and a missing structure is far
+      worse than a spurious one: the user cannot tell a phantom from a real structure they
+      failed to find, but they *can* verify a marker by travelling to it. Only act on a rule
+      taken from Minecraft's actual generation code, not one reverse-engineered from two cases.
+- [ ] Say so in the UI instead. Markers are candidate positions satisfying the biome rule; a
+      small fraction may not generate. That is honest and costs nothing.
+- [ ] If the rate turns out higher than ~5%, revisit — that would suggest a modelling gap
+      rather than the known limit of a biome-only check.
 
 ## 12.7 — Nearest-structure locator
 

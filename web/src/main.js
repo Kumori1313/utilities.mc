@@ -52,7 +52,8 @@ function syncStructures() {
   const on = [...document.querySelectorAll('#struct-list input:checked')].map((i) => i.dataset.struct);
   map2d.setStructureTypes(on);
   $('struct-hint').textContent = on.length
-    ? `shown when the view is under ${structures.maxBlocksAcross.toLocaleString()} blocks wide`
+    ? `shown under ${structures.maxBlocksAcross.toLocaleString()} blocks wide · positions pass ` +
+      `the biome rule, so a small fraction may not generate`
     : '';
 }
 $('struct-list').addEventListener('change', syncStructures);

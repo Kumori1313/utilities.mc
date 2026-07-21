@@ -185,9 +185,16 @@ int gen_biomes(int scale, int x, int y, int z, int sx, int sy, int sz, int *out)
 // Structure placement has changed across versions (salts, region sizes, viability rules), so
 // each type is a separate correctness claim and none is implied by the shared code path.
 //
-// VERIFIED against Chunkbase (seed 1 / 1.21.3): village, monument, mansion, stronghold.
-// PENDING verification: the other eleven. They use the identical two-step path, which is
-// reason to expect them to be right but is not evidence that they are.
+// VERIFIED against Chunkbase (seed 1 / 1.21.3): village, monument, mansion, stronghold, and
+// the nearest three of each remaining type — 31 of 33 positions matched.
+//
+// KNOWN LIMIT, and the reason those two did not: isViableStructurePos is documented as
+// performing "a biome check ... to determine whether a structure COULD spawn there". It is a
+// necessary condition, not a sufficient one, so this can report a position the game declines
+// to generate. False positives are possible; false negatives are not. Ruled out for the two
+// known cases: biome is valid at every sampled y, the position is its region's genuine
+// candidate with no near alternative, and it is identical across 1.20.6 through 1.21_WD. See
+// the guide's 12.6 for the full write-up — and do not paper over it with a terrain heuristic.
 // Overworld only. The Nether and End types (Fortress, Bastion, Ruined_Portal_N, End_City,
 // End_Gateway, End_Island) are deliberately absent: gen_structures refuses a type whose
 // dimension does not match the loaded generator, and the map loads the Overworld
