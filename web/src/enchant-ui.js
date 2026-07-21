@@ -2,7 +2,10 @@
 
 const ROMAN = ['', 'I', 'II', 'III', 'IV', 'V'];
 const roman = (n) => ROMAN[n] ?? String(n);
-const title = (id) => id.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+// In-game names that don't follow the id's word order.
+const DISPLAY = { vanishing_curse: 'Curse of Vanishing', binding_curse: 'Curse of Binding' };
+const title = (id) =>
+  DISPLAY[id] ?? id.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 // "sharpness 5" -> "Sharpness V"; used on the roll table.
 const fmt = (line) => {
   const i = line.lastIndexOf(' ');

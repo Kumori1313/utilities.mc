@@ -90,8 +90,10 @@ table.egrid { border-collapse: collapse; width: 100%; margin: .3rem 0 .2rem; }
 .egrid th:first-child { text-align: left; }
 .egrid td { border-bottom: 1px solid #ffffff12; }
 .egrid .ename { padding: .25rem .5rem .25rem 0; white-space: nowrap; }
-.egrid .have { display: inline-flex; align-items: center; gap: .2rem; margin-left: .5rem;
-  font-size: 11px; color: var(--muted); }
+/* row: the global `label` rule is column, which would stack "have" under the box and
+   grow every row's height. */
+.egrid .have { display: inline-flex; flex-direction: row; align-items: center; gap: .25rem;
+  margin-left: .5rem; font-size: 11px; color: var(--muted); }
 .egrid .have input { min-width: 0; width: auto; }
 .tier { width: 2.1rem; text-align: center; padding: .25rem 0; cursor: pointer;
   color: #8b93a7; user-select: none; border-left: 1px solid #ffffff12; }
