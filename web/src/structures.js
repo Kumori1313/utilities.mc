@@ -52,6 +52,7 @@ export const STRUCTURE_TYPES = [
   { id: 'trail_ruins', label: 'Trail ruins', color: '#c9a66b', dim: 'overworld' },
   { id: 'trial_chambers', label: 'Trial chambers', color: '#ff6ec7', dim: 'overworld' },
   { id: 'ruined_portal', label: 'Ruined portals', color: '#e57373', dim: 'overworld' },
+  { id: 'treasure', label: 'Buried treasure', color: '#a3e635', dim: 'overworld' },
   { id: 'stronghold', label: 'Strongholds', color: '#a6e9c4', dim: 'overworld' },
   { id: 'fortress', label: 'Nether fortresses', color: '#ff8a80', dim: 'nether' },
   { id: 'bastion', label: 'Bastion remnants', color: '#cfa2ff', dim: 'nether' },
@@ -61,9 +62,9 @@ export const STRUCTURE_TYPES = [
   // End height model as a second gate (END_CITY_MIN_Y), which reproduces all 18 Chunkbase
   // observations exactly, so they are back.
   { id: 'end_city', label: 'End cities', color: '#e6d9ff', dim: 'end' },
-  // End gateways stay withheld — not because they failed, but because nothing about them has
-  // been checked and there is no reason to assume the city height rule applies to them.
-  // { id: 'end_gateway', label: 'End gateways', color: '#b39ddb', dim: 'end' },
+  // Gateways were confirmed against Chunkbase in the original Part 14 list and are unaffected
+  // by the city height gate, which applies to End_City only.
+  { id: 'end_gateway', label: 'End gateways', color: '#b39ddb', dim: 'end' },
 ];
 
 /// Scan granularity. Each cell is scanned at most once per world and cached whole, so a pan

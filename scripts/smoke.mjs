@@ -103,6 +103,11 @@ check('ground', 'nearest desert pyramid', near('desert_pyramid'), [[272, 9552]])
 // once produced a phantom 129th stronghold.
 check('ground', 'nearest stronghold', near('stronghold'), [[-1132, 852]]);
 check('ground', 'stronghold count', S.nearest(0, 0, 'stronghold', 999).targets.length, 128);
+// Regression until checked: buried treasure is new. Its positions do satisfy the structural
+// invariant — treasure generates at chunk-relative (9, 9), so every x and z must be 9 mod 16.
+check('regression', 'nearest buried treasure', near('treasure'), [[-439, -343]]);
+check('ground', 'buried treasure sits at chunk-relative (9,9)',
+  near('treasure', 8).filter(([x, z]) => ((x % 16) + 16) % 16 !== 9 || ((z % 16) + 16) % 16 !== 9), []);
 
 // --- dimensions (Part 14) ---
 //
@@ -159,8 +164,11 @@ check('ground', 'End cities Chunkbase shows are reported',
   END_PRESENT.filter(([x, z]) => !cityAt(x, z)), []);
 check('ground', 'End cities Chunkbase does not show are filtered out',
   END_ABSENT.filter(([x, z]) => cityAt(x, z)), []);
-check('ground', 'End gateways remain withheld pending verification',
-  STRUCTURE_TYPES.filter((t) => t.dim === 'end').map((t) => t.id), ['end_city']);
+// Gateways were confirmed in the original Part 14 list and are unaffected by the city gate.
+const EG = createStructures(eng);
+check('ground', 'nearest end gateways',
+  EG.nearest(0, 0, 'end_gateway', 3).targets.map((t) => [t.x, t.z]),
+  [[1434, 66], [1002, 1315], [1038, 1290]]);
 
 // Leave the generator back in the Overworld for anything that follows.
 eng.setWorld(BigInt.asUintN(64, 1n), mc, 0);

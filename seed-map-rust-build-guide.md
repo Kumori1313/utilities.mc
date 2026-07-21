@@ -1201,8 +1201,28 @@ type's viability rule is, not how many regions it covers.
       rather than pasting the enum in and assuming the shared code path makes them all correct.
       Placement rules differ per type, so a shared path proves nothing about any single one.
 - [x] Prefer the types a player actually navigates to — outpost, desert pyramid, jungle temple,
-      swamp hut, igloo, ancient city, trail ruins, trial chambers, shipwreck, ruined portal —
-      over the ambient ones (geode, desert well, mineshaft) that mainly add clutter.
+      swamp hut, igloo, ancient city, trail ruins, trial chambers, shipwreck, ruined portal,
+      buried treasure — over the ambient ones (geode, desert well, mineshaft) that mainly add
+      clutter.
+
+### What is left, and why it was left
+
+Cubiomes exposes 23 structure types in 1.21.3; 21 are now live. The remainder were excluded on
+measurement, not oversight — counts are per default-zoom viewport at seed 1:
+
+| type | per viewport | why not |
+|---|---|---|
+| Geode | 621 | Players do hunt amethyst, but this needs its own far tighter zoom cutoff before it is information rather than noise. |
+| Mineshaft | 71 | Dense and underground; useful for routing, cluttered as markers. |
+| Desert well | ~0 | Cosmetic, and vanishingly rare. |
+| End island | 0 viable anywhere measured | The layer can only ever be empty (0 of 1,162 candidates near the origin, 0 of 1,212 at 12k out). |
+
+- [ ] **Two non-structure layers are better value than any of those**, and Cubiomes already
+      supports both: slime chunks (`isSlimeChunk`) and world spawn (`getSpawn` /
+      `estimateSpawn`). Slime chunks in particular are a staple of every other seed map and
+      matter for farm planning. They need a different rendering path — a shaded chunk overlay
+      rather than point markers — so they are their own piece of work, not another entry in
+      `STRUCTURE_TYPES`.
 
 ### Known discrepancy — `isViableStructurePos` is a biome check, nothing more
 
@@ -1429,8 +1449,8 @@ ships the model and the constant was measured.
 - [x] 18 Chunkbase observations now separate perfectly: present at 61, 63, 63, 63; absent at
       60, 60, 59, 59, 58, 57, 57, 57, 56, 56 and three over void. All 18 are encoded in the
       smoke test as ground truth, and moving the constant to 60 or 62 breaks it immediately.
-- [ ] **End gateways remain withheld.** Not because they failed — nothing about them has been
-      checked at all — and there is no reason to assume a city's height rule applies to them.
+- [x] **End gateways verified and enabled.** Confirmed against Chunkbase in the original Part
+      14 list, and unaffected by the height gate, which applies to `End_City` only.
 - [ ] The same gap may exist for other types in other dimensions. The lesson generalises: where
       Cubiomes exposes a terrain model for a dimension, a biome-only viability check is a
       necessary condition, not a sufficient one.

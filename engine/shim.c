@@ -225,6 +225,7 @@ int structure_id(const char *name) {
     if (!strcmp(name, "trail_ruins"))     return Trail_Ruins;
     if (!strcmp(name, "trial_chambers"))  return Trial_Chambers;
     if (!strcmp(name, "ruined_portal"))   return Ruined_Portal;
+    if (!strcmp(name, "treasure"))        return Treasure;
     if (!strcmp(name, "stronghold"))      return -2; // separate algorithm; see gen_strongholds
     // Nether
     if (!strcmp(name, "fortress"))        return Fortress;
