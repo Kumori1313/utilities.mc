@@ -75,6 +75,7 @@ export function create2D({ canvas, engine, palette, mcVersion, ui, structures })
   const markerLabel = new Map(STRUCTURE_TYPES.map((t) => [t.id, t.label.replace(/s$/, '')]));
   let showTypes = new Set(); // structure types the user has enabled
   let markers = []; // last drawn markers, with screen positions, for hover
+  let nearest = null; // { origin: {x, z}, type, targets: [{x, z, dist}] }
 
   let bpp = DEFAULT_BPP; // blocks per screen pixel — the single source of truth for zoom
   let cx = 0, cz = 0; // world-block coordinate at the canvas centre
@@ -216,6 +217,73 @@ export function create2D({ canvas, engine, palette, mcVersion, ui, structures })
     if (pending > 0) scheduleDraw();
   }
 
+  /// Point where the segment origin->target leaves the canvas (inset by `m`), or the target
+  /// itself when already inside. An off-screen target can then still report its distance at
+  /// the edge, instead of being labelled far outside the canvas where nothing is drawn.
+  function clampToView(x0, y0, x1, y1, w, h, m) {
+    if (x1 >= m && x1 <= w - m && y1 >= m && y1 <= h - m) return [x1, y1];
+    const dx = x1 - x0, dy = y1 - y0;
+    let t = 1;
+    const lim = (num, den) => {
+      if (den === 0) return;
+      const s = num / den;
+      if (s >= 0) t = Math.min(t, s);
+    };
+    if (x1 < m) lim(m - x0, dx);
+    if (x1 > w - m) lim(w - m - x0, dx);
+    if (y1 < m) lim(m - y0, dy);
+    if (y1 > h - m) lim(h - m - y0, dy);
+    return [x0 + dx * t, y0 + dy * t];
+  }
+
+  /// Lines from the search origin to each nearest-N target.
+  ///
+  /// Anchored to the origin the search actually used, NOT the current view centre. The
+  /// targets are "nearest to that point"; re-drawing them from a centre the user has since
+  /// panned would depict a relationship that was never computed.
+  function drawNearest(w, h) {
+    if (!nearest || nearest.targets.length === 0) return;
+    const ox = w / 2 + (nearest.origin.x - cx) / bpp;
+    const oy = h / 2 + (nearest.origin.z - cz) / bpp;
+    const color = markerColor.get(nearest.type) ?? '#ffffff';
+
+    ctx.save();
+    ctx.font = '11px system-ui, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    for (const t of nearest.targets) {
+      const tx = w / 2 + (t.x - cx) / bpp;
+      const ty = h / 2 + (t.z - cz) / bpp;
+
+      // Dark under-stroke first so the line survives a light biome underneath.
+      ctx.setLineDash([5, 4]);
+      ctx.lineWidth = 3;
+      ctx.strokeStyle = '#000000aa';
+      ctx.beginPath(); ctx.moveTo(ox, oy); ctx.lineTo(tx, ty); ctx.stroke();
+      ctx.lineWidth = 1.25;
+      ctx.strokeStyle = color;
+      ctx.beginPath(); ctx.moveTo(ox, oy); ctx.lineTo(tx, ty); ctx.stroke();
+      ctx.setLineDash([]);
+
+      // Ring the target so it reads even when that type's marker layer is switched off.
+      ctx.lineWidth = 2.5;
+      ctx.strokeStyle = '#000000aa';
+      ctx.beginPath(); ctx.arc(tx, ty, 7, 0, Math.PI * 2); ctx.stroke();
+      ctx.lineWidth = 1.5;
+      ctx.strokeStyle = color;
+      ctx.beginPath(); ctx.arc(tx, ty, 7, 0, Math.PI * 2); ctx.stroke();
+
+      const [lx, ly] = clampToView(ox, oy, tx, ty, w, h, 24);
+      const label = `${Math.round(t.dist).toLocaleString()}`;
+      ctx.lineWidth = 3;
+      ctx.strokeStyle = '#000000cc';
+      ctx.strokeText(label, lx, ly - 12);
+      ctx.fillStyle = '#ffffff';
+      ctx.fillText(label, lx, ly - 12);
+    }
+    ctx.restore();
+  }
+
   function draw() {
     const w = canvas.clientWidth, h = canvas.clientHeight;
     if (w === 0 || h === 0) return; // hidden
@@ -261,6 +329,7 @@ export function create2D({ canvas, engine, palette, mcVersion, ui, structures })
     }
 
     drawMarkers(w, h);
+    drawNearest(w, h);
 
     // Centre crosshair, so the coordinate readout has a visible anchor. Its colour adapts to
     // the biome underneath — a white cross disappears on snow and ice, a dark one on deep
@@ -384,6 +453,7 @@ export function create2D({ canvas, engine, palette, mcVersion, ui, structures })
       // the cache is dropped wholesale — the same rule the Rust tile cache enforces.
       tiles.clear();
       structures.setWorld(); // same rule: a structure list from the old world looks correct
+      nearest = null; // targets from the previous world would draw just as convincingly
       cx = x; cz = z;
       dirty = true;
       if (shown) draw();
@@ -391,6 +461,15 @@ export function create2D({ canvas, engine, palette, mcVersion, ui, structures })
     /// Which structure types to overlay. Re-renders immediately.
     setStructureTypes(set) {
       showTypes = new Set(set);
+      if (shown) draw();
+    },
+    /// World-block coordinate at the view centre — the origin a nearest-search runs from.
+    centre() {
+      return { x: cx, z: cz };
+    },
+    /// Show (or clear, with null) the result of a nearest-structure search.
+    setNearest(result) {
+      nearest = result;
       if (shown) draw();
     },
     show() {

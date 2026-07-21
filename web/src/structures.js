@@ -48,6 +48,11 @@ const SCAN_CAP = 256;
 /// that returns fewer.
 const STRONGHOLD_CAP = 200;
 
+/// Widest ring the nearest-search will expand to, in grid cells — a ~86k-block half-extent.
+/// A rare structure in an unlucky direction can genuinely be this far, but past here the
+/// honest answer is "not found nearby" rather than an unbounded scan.
+const MAX_RINGS = 42;
+
 export function createStructures(engine) {
   const cache = new Map(); // "type:gx:gz" -> [[x, z], ...]
   let strongholds = null; // whole-world, fetched once per seed
@@ -140,6 +145,63 @@ export function createStructures(engine) {
         }
       }
       return { found, pending };
+    },
+
+    /// The `count` nearest structures of `type` to a block position, nearest first.
+    ///
+    /// Returns `{ targets: [{x, z, dist}], searched, truncated }`, where `searched` is the
+    /// half-extent in blocks actually covered and `truncated` means the search hit its budget
+    /// or ring cap before it could prove the answer — in which case the targets are the best
+    /// found, not necessarily the nearest.
+    ///
+    /// # The stopping rule
+    ///
+    /// Expanding in square rings and halting on the `count`-th hit is WRONG: a structure
+    /// found in the corner of a scanned ring can be farther away than one sitting just beyond
+    /// that ring's near edge, which has not been looked at yet. Everything unscanned lies
+    /// outside the square covered so far, so it is at least `edge` blocks away, where `edge`
+    /// is the distance from the origin to the nearest side of that square. It is only safe to
+    /// stop once `count` results are in hand AND the `count`-th is no farther than `edge`.
+    nearest(ox, oz, type, count, timeCapMs = 150) {
+      // Strongholds are all cached already, so this needs no search at all — but they come
+      // back in ring order, which is only loosely distance order, so they must be sorted.
+      if (type === 'stronghold') {
+        const all = allStrongholds()
+          .map(([x, z]) => ({ x, z, dist: Math.hypot(x - ox, z - oz) }))
+          .sort((a, b) => a.dist - b.dist);
+        return { targets: all.slice(0, count), searched: Infinity, truncated: false };
+      }
+
+      const gx0 = Math.floor(ox / GRID), gz0 = Math.floor(oz / GRID);
+      const found = [];
+      const started = performance.now();
+      let truncated = false;
+      let r = 0;
+      for (; r <= MAX_RINGS; r++) {
+        for (let gz = gz0 - r; gz <= gz0 + r; gz++) {
+          // On the two edge rows walk every column; between them only the two side columns.
+          const edgeRow = gz === gz0 - r || gz === gz0 + r;
+          const step = edgeRow ? 1 : 2 * r;
+          for (let gx = gx0 - r; gx <= gx0 + r; gx += step) {
+            for (const [x, z] of scanCell(type, gx, gz)) {
+              found.push({ x, z, dist: Math.hypot(x - ox, z - oz) });
+            }
+          }
+        }
+        found.sort((a, b) => a.dist - b.dist);
+
+        const x0 = (gx0 - r) * GRID, x1 = (gx0 + r + 1) * GRID;
+        const z0 = (gz0 - r) * GRID, z1 = (gz0 + r + 1) * GRID;
+        const edge = Math.min(ox - x0, x1 - ox, oz - z0, z1 - oz);
+        if (found.length >= count && found[count - 1].dist <= edge) break;
+
+        if (performance.now() - started > timeCapMs) { truncated = true; break; }
+      }
+      return {
+        targets: found.slice(0, count),
+        searched: (r + 1) * GRID,
+        truncated: truncated || r > MAX_RINGS,
+      };
     },
   };
 }

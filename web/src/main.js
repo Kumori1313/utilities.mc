@@ -57,6 +57,36 @@ function syncStructures() {
 }
 $('struct-list').addEventListener('change', syncStructures);
 
+// Nearest-structure locator. Run on demand rather than continuously: the search is anchored
+// to the centre at the moment it runs, so recomputing while panning would re-target the lines
+// under the user's hand.
+$('loc-type').innerHTML = STRUCTURE_TYPES.map((t) =>
+  `<option value="${t.id}">${t.label}</option>`).join('');
+$('loc-go').addEventListener('click', () => {
+  const type = $('loc-type').value;
+  const n = +$('loc-n').value;
+  const origin = map2d.centre();
+  const started = performance.now();
+  const { targets, searched, truncated } =
+    structures.nearest(Math.round(origin.x), Math.round(origin.z), type, n);
+  const ms = Math.round(performance.now() - started);
+  map2d.setNearest({ origin, type, targets });
+  if (targets.length === 0) {
+    $('loc-out').textContent = `none found within ${searched.toLocaleString()} blocks`;
+  } else {
+    const far = Math.round(targets[targets.length - 1].dist).toLocaleString();
+    // "best found" rather than "nearest" when the search was cut short — the distinction is
+    // the whole point of the stopping rule, so the UI must not overstate it.
+    $('loc-out').textContent =
+      `${targets.length} ${truncated ? 'found' : 'nearest'}, out to ${far} blocks (${ms} ms)` +
+      (truncated ? ' — search truncated, may not be the nearest' : '');
+  }
+});
+$('loc-clear').addEventListener('click', () => {
+  map2d.setNearest(null);
+  $('loc-out').textContent = '';
+});
+
 // Render distance (3D). JS holds the source of truth: a range input laid out while
 // display:none can corrupt its own `value` property to its max, so we never read the
 // slider to seed state — we write this value into it once it is visible.

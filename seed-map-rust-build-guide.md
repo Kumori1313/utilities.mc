@@ -1209,28 +1209,40 @@ type's viability rule is, not how many regions it covers.
 Find the N nearest structures of a chosen type and draw a line to each from the view centre.
 Depends on 12.4's cache; the search is the interesting part.
 
-- [ ] **Landmine — stopping as soon as N are found gives wrong answers.** Scanning outward in
+- [x] **Landmine — stopping as soon as N are found gives wrong answers.** Scanning outward in
       square rings of grid cells and halting on the Nth hit is the obvious implementation and
       it is incorrect: a structure in the next unscanned ring can be nearer than one found in
       the *corner* of a ring already scanned. Keep expanding until the nearest possible point
       of the next ring is farther than the current Nth-best distance, then stop. This is the
       one part of the feature that can be confidently wrong.
-- [ ] **Landmine — strongholds are not returned in distance order.** `gen_strongholds` yields
+      **Implemented as: everything unscanned lies outside the square covered so far, so it is
+      at least `edge` away (origin to nearest side); stop only once N results are in hand and
+      the Nth is no farther than `edge`.** Verified against brute force — 672 checks on a
+      synthetic world and 30 on the real engine across three types and five origins, 0
+      mismatches. Substituting the naive rule breaks 45 of the 672, including at N=1, so the
+      failure is routine rather than a corner case.
+- [x] **Landmine — strongholds are not returned in distance order.** `gen_strongholds` yields
       ring order, which is only loosely distance order: on seed 1 the first three sit at 1809,
       1871 and 1416 blocks. Sort by actual distance rather than taking the first N. The upside
       is that all 128 are already cached, so nearest-N for strongholds needs no search at all.
-- [ ] Cap the search radius and report honestly when it is hit ("none within N blocks") rather
+      **Confirmed live: the nearest to the origin is the third Cubiomes returns.**
+- [x] Cap the search radius and report honestly when it is hit ("none within N blocks") rather
       than silently returning fewer than asked. An empty result and a truncated search look the
-      same to the user otherwise.
-- [ ] Reuse the 12.4 grid cache for the search, and respect the same frame budget — a wide
-      search is many cells, and it must not block the UI any more than a pan does.
-- [ ] **Draw lines in screen space, and handle targets off-screen.** The nearest match is
+      same to the user otherwise. **The readout says "found" rather than "nearest" and warns
+      explicitly when the search was cut short.**
+- [x] Reuse the 12.4 grid cache for the search. **Deviation: it uses a one-off time cap
+      (150 ms) rather than the per-frame budget, because the search is user-triggered rather
+      than per-frame — there is no frame to starve. Measured 2 ms for the 4 nearest mansions
+      from the origin, the sparsest of the four types, so the cap is far from binding.**
+- [x] **Draw lines in screen space, and handle targets off-screen.** The nearest match is
       usually outside the viewport at useful zooms. Clamp the line to the canvas edge with a
       distance label rather than drawing to coordinates far outside it. Show the block distance
       and the target coordinate; that is the number the user actually wants.
-- [ ] Let the user pick N (e.g. 1, 4, 8). Keep the selection stable while panning so the lines
+- [x] Let the user pick N (e.g. 1, 4, 8). Keep the selection stable while panning so the lines
       do not re-target on every frame — recompute on demand or when the centre moves past a
-      threshold, not continuously.
+      threshold, not continuously. **Lines anchor to the origin the search used, not the
+      current centre: the targets were nearest to that point, and re-anchoring would depict a
+      relationship never computed.**
 
 ## 12.8 — Map interaction polish
 
