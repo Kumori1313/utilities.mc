@@ -7,7 +7,7 @@ import { create2D } from './map2d.js';
 import { create3D } from './map3d.js';
 import { setupEnchant } from './enchant-ui.js';
 import { setupPortal } from './portal-ui.js';
-import { createStructures, STRUCTURE_TYPES } from './structures.js';
+import { createStructures, STRUCTURE_TYPES, DIMENSIONS } from './structures.js';
 
 const $ = (id) => document.getElementById(id);
 const setStatus = (msg, cls = '') => { const s = $('status'); s.textContent = msg; s.className = cls; };
@@ -33,21 +33,59 @@ const structures = createStructures(engine);
 const map2d = create2D({ canvas: $('view2d'), engine, palette, mcVersion, ui, structures });
 const map3d = create3D({ canvas: $('view3d'), engine, View, palette, mcVersion, ui });
 
+// Dimension (Part 14). The 2D map generates all three; the 3D view cannot, because Cubiomes'
+// mapApproxHeight has no height model outside the Overworld and gen_heights returns -1 there.
+$('dim').innerHTML = DIMENSIONS.map((d) => `<option value="${d.id}">${d.label}</option>`).join('');
+let dim = 0;
+const dimName = () => DIMENSIONS.find((d) => d.id === dim).name;
+
 // Both renderers share the engine's single generator, so seed it once here, then hand the
 // same world to each. Each renders if visible and defers if hidden.
+//
+// Landmine (14.1): four separate caches key on the world — the C generator here, the Rust
+// View inside map3d, and the 2D map's own tile and structure caches. Every one must be told,
+// or tiles generated in the previous dimension stay on screen looking entirely correct.
+// map2d.setWorld clears its two; map3d.setWorld resets the View.
 function loadWorld(seedText, x, z) {
   const seed = parseSeed(seedText);
-  if (engine.setWorld(seed, mcVersion, 0) !== 0) { setStatus('engine set_world failed', 'err'); return; }
-  map2d.setWorld(seedText, x, z);
-  map3d.setWorld(seedText, x, z);
+  if (engine.setWorld(seed, mcVersion, dim) !== 0) {
+    setStatus(`engine set_world failed (dimension ${dim})`, 'err');
+    return;
+  }
+  map2d.setWorld(seedText, x, z, dim);
+  map3d.setWorld(seedText, x, z, dim);
 }
 
-// Structure overlay (2D only for now — the 3D view has no marker path yet). Village,
-// monument, mansion and stronghold are confirmed against Chunkbase on seed 1 / 1.21.3; the
-// other eleven are pending. All start off, so a first load pays no scan cost.
-$('struct-list').innerHTML = STRUCTURE_TYPES.map((t) =>
-  `<label class="chk"><input type="checkbox" data-struct="${t.id}">` +
-  `<span class="swatch" style="background:${t.color}"></span>${t.label}</label>`).join('');
+$('dim').addEventListener('change', () => {
+  dim = +$('dim').value | 0;
+  // Structure types are per-dimension, so the list has to be rebuilt before reloading.
+  renderStructureList();
+  if (dim !== 0 && mapMode === '3d') setMode('2d'); // 3D has no terrain outside the Overworld
+  syncModeAvailability();
+  submit();
+});
+
+// Structure overlay (2D only — the 3D view has no marker path). Village, monument, mansion and
+// stronghold are confirmed against Chunkbase on seed 1 / 1.21.3; the rest are pending. All
+// start off, so a first load pays no scan cost.
+//
+// Only the current dimension's types are offered: gen_structures refuses a mismatch, so
+// listing the others would give the user a checkbox that finds nothing and says nothing.
+function typesHere() {
+  return STRUCTURE_TYPES.filter((t) => t.dim === dimName());
+}
+function renderStructureList() {
+  $('struct-list').innerHTML = typesHere().map((t) =>
+    `<label class="chk"><input type="checkbox" data-struct="${t.id}">` +
+    `<span class="swatch" style="background:${t.color}"></span>${t.label}</label>`).join('');
+  $('loc-type').innerHTML = typesHere().map((t) =>
+    `<option value="${t.id}">${t.label}</option>`).join('');
+  // Selections and any drawn search belong to the old dimension's types.
+  map2d.setStructureTypes([]);
+  map2d.setNearest(null);
+  $('loc-out').textContent = '';
+  syncStructures();
+}
 function syncStructures() {
   const on = [...document.querySelectorAll('#struct-list input:checked')].map((i) => i.dataset.struct);
   map2d.setStructureTypes(on);
@@ -60,9 +98,7 @@ $('struct-list').addEventListener('change', syncStructures);
 
 // Nearest-structure locator. Run on demand rather than continuously: the search is anchored
 // to the centre at the moment it runs, so recomputing while panning would re-target the lines
-// under the user's hand.
-$('loc-type').innerHTML = STRUCTURE_TYPES.map((t) =>
-  `<option value="${t.id}">${t.label}</option>`).join('');
+// under the user's hand. Its type list is populated by renderStructureList(), per dimension.
 $('loc-go').addEventListener('click', () => {
   const type = $('loc-type').value;
   const n = +$('loc-n').value;
@@ -127,8 +163,18 @@ for (const id of ['seed', 'cx', 'cz']) {
   $(id).addEventListener('keydown', (e) => { if (e.key === 'Enter') submit(); });
 }
 
+// The 3D view is Overworld-only and always will be: gen_heights returns -1 for the Nether and
+// the End because Cubiomes has no height model there. Disable the toggle and say why, rather
+// than switching to a view that would render nothing (14.4).
+function syncModeAvailability() {
+  const btn = document.querySelector('#map-mode button[data-mode="3d"]');
+  const ok = dim === 0;
+  btn.disabled = !ok;
+  btn.title = ok ? '' : 'The 3D view is Overworld-only — no terrain height model exists for this dimension';
+}
+
 document.querySelectorAll('#map-mode button').forEach((b) =>
-  b.addEventListener('click', () => setMode(b.dataset.mode)));
+  b.addEventListener('click', () => { if (!b.disabled) setMode(b.dataset.mode); }));
 
 // Dragging the slider is the one time the input is the source of truth (it is visible and
 // user-driven); mirror it into renderRadius and apply it.
@@ -152,5 +198,7 @@ document.querySelectorAll('#tabs button').forEach((btn) => btn.addEventListener(
 
 // --- go ---------------------------------------------------------------------
 // Seed the engine first, then show the default (2D) view so its first draw has a world.
+renderStructureList();
+syncModeAvailability();
 loadWorld('1', 0, 0);
 setMode('2d');

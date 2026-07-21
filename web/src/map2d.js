@@ -11,6 +11,8 @@
 
 import { STRUCTURE_TYPES } from './structures.js';
 
+const DIM_LABEL = { 0: '2D', [-1]: 'Nether', 1: 'End' };
+
 // Zoom is a continuous blocks-per-pixel value, not a ladder of fixed stops. The wheel scales
 // it exponentially, so one notch is the same ratio at every level and a trackpad's many small
 // deltas come through proportionally. The Cubiomes generation scale is *derived* from it
@@ -76,6 +78,7 @@ export function create2D({ canvas, engine, palette, mcVersion, ui, structures })
   let showTypes = new Set(); // structure types the user has enabled
   let markers = []; // last drawn markers, with screen positions, for hover
   let nearest = null; // { origin: {x, z}, type, targets: [{x, z, dist}] }
+  let dim = 0; // Cubiomes DIM_* — only affects presentation here; generation is set globally
 
   let bpp = DEFAULT_BPP; // blocks per screen pixel — the single source of truth for zoom
   let cx = 0, cz = 0; // world-block coordinate at the canvas centre
@@ -348,9 +351,13 @@ export function create2D({ canvas, engine, palette, mcVersion, ui, structures })
     ctx.stroke();
 
     const pending = missing.length - generated;
+    // In the Nether one block is eight Overworld blocks, so the same view covers eight times
+    // the ground and a raw coordinate is not the one a player needs. Show the Overworld
+    // equivalent alongside it — the ratio Part 11's converter already encodes.
+    const equiv = dim === -1 ? ` (overworld ${Math.round(cx * 8)}, ${Math.round(cz * 8)})` : '';
     ui.setStatus(
-      `2D · scale ${scale} · ${Math.round(w * bpp)} blocks across · ` +
-        `centre ${Math.round(cx)}, ${Math.round(cz)}` +
+      `${DIM_LABEL[dim] ?? '2D'} · scale ${scale} · ${Math.round(w * bpp)} blocks across · ` +
+        `centre ${Math.round(cx)}, ${Math.round(cz)}${equiv}` +
         (pending > 0 ? ` · loading ${pending}` : ''),
       'ok',
     );
@@ -447,13 +454,14 @@ export function create2D({ canvas, engine, palette, mcVersion, ui, structures })
   }, { passive: false });
 
   return {
-    setWorld(_seedText, x, z) {
+    setWorld(_seedText, x, z, newDim = 0) {
       // Every cached tile was generated under the previous seed/version. Serving one after a
       // world change is a silent wrong-biome bug that looks exactly like correct output, so
       // the cache is dropped wholesale — the same rule the Rust tile cache enforces.
       tiles.clear();
       structures.setWorld(); // same rule: a structure list from the old world looks correct
       nearest = null; // targets from the previous world would draw just as convincingly
+      dim = newDim;
       cx = x; cz = z;
       dirty = true;
       if (shown) draw();

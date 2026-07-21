@@ -1353,7 +1353,7 @@ Measure before planning here, because the split is not where it looks.
 
 ## 14.1 — Dimension selector and world plumbing
 
-- [ ] Add a dimension control alongside the seed/coordinate inputs, and route it into
+- [x] Add a dimension control alongside the seed/coordinate inputs, and route it into
       `loadWorld`, which currently passes a hardcoded `0`.
 - [ ] **Landmine — the same two-`set_world` trap as 13.2.** The engine shim holds the C
       generator; the Rust `View` holds the tile cache; the 2D renderer holds its own JS tile
@@ -1365,8 +1365,8 @@ Measure before planning here, because the split is not where it looks.
 
 ## 14.2 — Rendering the other dimensions
 
-- [ ] **Landmine — the Nether's 1:8 coordinate ratio makes the same zoom mean different
-      things.** A Nether view 1,920 blocks wide covers ground equivalent to 15,360 Overworld
+- [x] **Landmine — the Nether's 1:8 coordinate ratio makes the same zoom mean different
+      things.** The readout now shows the Overworld-equivalent centre alongside the Nether one. A Nether view 1,920 blocks wide covers ground equivalent to 15,360 Overworld
       blocks. Decide deliberately whether the zoom range, the default zoom, and the
       blocks-across readout are per-dimension, and consider showing the Overworld-equivalent
       coordinate — which is exactly what Part 11's converter already computes. A Nether map
@@ -1383,14 +1383,23 @@ Measure before planning here, because the split is not where it looks.
 
 ## 14.3 — Structures in the other dimensions
 
-- [ ] Six types unlock, and only with this part: `Fortress`, `Bastion` and `Ruined_Portal_N`
-      (Nether); `End_City`, `End_Gateway` and `End_Island` (End). This is why 12.6 explicitly
-      scopes them out.
-- [ ] **`gen_structures` already refuses a type whose `sc.dim` does not match the loaded
+- [x] Five of the six types now ship: `Fortress`, `Bastion`, `Ruined_Portal_N` (Nether) and
+      `End_City`, `End_Gateway` (End). **`End_Island` is excluded**: measured at seed 1 it is
+      viable for 0 of 1,162 candidates near the origin and 0 of 1,212 out at (12000, 12000), so
+      the layer would always be empty. Exposing a control that can only ever draw nothing is
+      worse than omitting it.
+- [x] **Nether ruined portals sit at the same coordinates as Overworld ones, and that is not a
+      bug.** Since 1.18 Cubiomes gives both the same salt (34222645), region size and chunk
+      range, differing only in `dim`; pre-1.18 they had their own spacing. Nether candidates
+      are also viable unconditionally — the Nether branch returns 1 for the type without a
+      biome check — so every candidate shows. The coincidence looks like a copy-paste bug on
+      screen, which is exactly why it is worth writing down before someone "fixes" it.
+- [x] **`gen_structures` already refuses a type whose `sc.dim` does not match the loaded
       generator** — a deliberate guard, not a bug to work around. The UI must filter the offered
       type list by the active dimension, or the user checks a box and correctly gets nothing,
-      with no explanation.
-- [ ] **Strongholds are Overworld-only** and `gen_strongholds` guards on it. Do not let the
+      with no explanation. Each type now carries its dimension, and the checkbox list and the
+      locator dropdown are both rebuilt per dimension.
+- [x] **Strongholds are Overworld-only** and `gen_strongholds` guards on it. Do not let the
       stronghold toggle survive a switch to another dimension.
 - [ ] Each new type needs the same Chunkbase verification as the first four (12.4), against the
       right dimension's map. Nether fortresses in particular changed placement in 1.16; a check
@@ -1398,8 +1407,11 @@ Measure before planning here, because the split is not where it looks.
 
 ## 14.4 — The 3D view stays Overworld
 
-- [ ] Disable, or clearly mark, the 3D toggle when a non-Overworld dimension is selected.
-      Silently rendering flat or empty terrain is worse than refusing.
+- [x] Disable, or clearly mark, the 3D toggle when a non-Overworld dimension is selected.
+      Silently rendering flat or empty terrain is worse than refusing. The toggle is disabled
+      with a tooltip explaining why, and `map3d.setWorld` DROPS a non-Overworld load rather
+      than deferring it — keeping it pending would replay a load it can never satisfy on the
+      next switch back.
 - [ ] Only revisit this if a real height source appears. Approximating Nether terrain from
       biome data alone would produce confident, wrong topography — the same class of error as
       the y=0 cave-biome bug, and harder to notice because nobody has an intuition for what a

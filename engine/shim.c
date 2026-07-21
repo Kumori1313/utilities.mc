@@ -200,14 +200,14 @@ int gen_biomes(int scale, int x, int y, int z, int sx, int sy, int sz, int *out)
 // known cases: biome is valid at every sampled y, the position is its region's genuine
 // candidate with no near alternative, and it is identical across 1.20.6 through 1.21_WD. See
 // the guide's 12.6 for the full write-up — and do not paper over it with a terrain heuristic.
-// Overworld only. The Nether and End types (Fortress, Bastion, Ruined_Portal_N, End_City,
-// End_Gateway, End_Island) are deliberately absent: gen_structures refuses a type whose
-// dimension does not match the loaded generator, and the map loads the Overworld
-// unconditionally. They belong to Part 14, not here.
+// Every dimension's types live here; gen_structures refuses any whose dimension does not
+// match the loaded generator, so the caller must offer only the ones matching set_world's dim.
 //
-// The per-chunk types (Treasure, Mineshaft, Desert_Well, Geode) are also left out, but for a
-// different reason — not cost, which is fine, but density. Geodes alone come in at ~620 per
-// default-zoom viewport, which is noise rather than information.
+// Left out on density grounds, not cost: the per-chunk Overworld types (Treasure, Mineshaft,
+// Desert_Well, Geode) — geodes alone are ~620 per default-zoom viewport, noise rather than
+// information. End_Island is left out for the opposite reason: measured at seed 1 it is viable
+// for 0 of 1,162 candidates near the origin and 0 of 1,212 out at (12000, 12000), so exposing
+// it would only ever draw an empty layer.
 EMSCRIPTEN_KEEPALIVE
 int structure_id(const char *name) {
     if (!name) return -1;
@@ -226,6 +226,13 @@ int structure_id(const char *name) {
     if (!strcmp(name, "trial_chambers"))  return Trial_Chambers;
     if (!strcmp(name, "ruined_portal"))   return Ruined_Portal;
     if (!strcmp(name, "stronghold"))      return -2; // separate algorithm; see gen_strongholds
+    // Nether
+    if (!strcmp(name, "fortress"))        return Fortress;
+    if (!strcmp(name, "bastion"))         return Bastion;
+    if (!strcmp(name, "ruined_portal_n")) return Ruined_Portal_N;
+    // End
+    if (!strcmp(name, "end_city"))        return End_City;
+    if (!strcmp(name, "end_gateway"))     return End_Gateway;
     return -1;
 }
 

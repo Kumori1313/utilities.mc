@@ -23,25 +23,41 @@
 
 /// Types offered, in draw order. `stronghold` is deliberately separate in the engine (rings,
 /// not regions) and is handled by its own path below.
+/// Dimensions, matching Cubiomes' DIM_* values — which set_world takes directly.
+export const DIMENSIONS = [
+  { id: 0, name: 'overworld', label: 'Overworld' },
+  { id: -1, name: 'nether', label: 'Nether' },
+  { id: 1, name: 'end', label: 'End' },
+];
+
 /// Colours are chosen to stay distinguishable *on top of biome colours*, which is why they
 /// are light and saturated rather than a conventional categorical palette — every marker also
 /// carries a dark outline for the same reason.
+///
+/// `dim` is load-bearing, not documentation: `gen_structures` refuses a type whose dimension
+/// does not match the loaded generator, so offering one from the wrong dimension would give
+/// the user a checkbox that silently finds nothing.
 export const STRUCTURE_TYPES = [
-  { id: 'village', label: 'Villages', color: '#ffd28a' },
-  { id: 'outpost', label: 'Pillager outposts', color: '#ff8f6e' },
-  { id: 'desert_pyramid', label: 'Desert pyramids', color: '#ffe066' },
-  { id: 'jungle_temple', label: 'Jungle temples', color: '#7bd88f' },
-  { id: 'swamp_hut', label: 'Swamp huts', color: '#66c2a5' },
-  { id: 'igloo', label: 'Igloos', color: '#d6f0ff' },
-  { id: 'monument', label: 'Ocean monuments', color: '#6ea8fe' },
-  { id: 'ocean_ruin', label: 'Ocean ruins', color: '#80deea' },
-  { id: 'shipwreck', label: 'Shipwrecks', color: '#b0bec5' },
-  { id: 'mansion', label: 'Woodland mansions', color: '#d08bff' },
-  { id: 'ancient_city', label: 'Ancient cities', color: '#4fd1c5' },
-  { id: 'trail_ruins', label: 'Trail ruins', color: '#c9a66b' },
-  { id: 'trial_chambers', label: 'Trial chambers', color: '#ff6ec7' },
-  { id: 'ruined_portal', label: 'Ruined portals', color: '#e57373' },
-  { id: 'stronghold', label: 'Strongholds', color: '#a6e9c4' },
+  { id: 'village', label: 'Villages', color: '#ffd28a', dim: 'overworld' },
+  { id: 'outpost', label: 'Pillager outposts', color: '#ff8f6e', dim: 'overworld' },
+  { id: 'desert_pyramid', label: 'Desert pyramids', color: '#ffe066', dim: 'overworld' },
+  { id: 'jungle_temple', label: 'Jungle temples', color: '#7bd88f', dim: 'overworld' },
+  { id: 'swamp_hut', label: 'Swamp huts', color: '#66c2a5', dim: 'overworld' },
+  { id: 'igloo', label: 'Igloos', color: '#d6f0ff', dim: 'overworld' },
+  { id: 'monument', label: 'Ocean monuments', color: '#6ea8fe', dim: 'overworld' },
+  { id: 'ocean_ruin', label: 'Ocean ruins', color: '#80deea', dim: 'overworld' },
+  { id: 'shipwreck', label: 'Shipwrecks', color: '#b0bec5', dim: 'overworld' },
+  { id: 'mansion', label: 'Woodland mansions', color: '#d08bff', dim: 'overworld' },
+  { id: 'ancient_city', label: 'Ancient cities', color: '#4fd1c5', dim: 'overworld' },
+  { id: 'trail_ruins', label: 'Trail ruins', color: '#c9a66b', dim: 'overworld' },
+  { id: 'trial_chambers', label: 'Trial chambers', color: '#ff6ec7', dim: 'overworld' },
+  { id: 'ruined_portal', label: 'Ruined portals', color: '#e57373', dim: 'overworld' },
+  { id: 'stronghold', label: 'Strongholds', color: '#a6e9c4', dim: 'overworld' },
+  { id: 'fortress', label: 'Nether fortresses', color: '#ff8a80', dim: 'nether' },
+  { id: 'bastion', label: 'Bastion remnants', color: '#cfa2ff', dim: 'nether' },
+  { id: 'ruined_portal_n', label: 'Ruined portals', color: '#ffcc80', dim: 'nether' },
+  { id: 'end_city', label: 'End cities', color: '#e6d9ff', dim: 'end' },
+  { id: 'end_gateway', label: 'End gateways', color: '#b39ddb', dim: 'end' },
 ];
 
 /// Scan granularity. Each cell is scanned at most once per world and cached whole, so a pan

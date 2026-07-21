@@ -243,7 +243,12 @@ export function create3D({ canvas, engine, View, palette, mcVersion, ui }) {
 
   return {
     // Store the load; render now if visible, else defer until shown.
-    setWorld(seedText, x, z) {
+    //
+    // Non-Overworld loads are dropped rather than deferred: gen_heights returns -1 for the
+    // Nether and the End, so every tile would fail. Keeping it pending would mean switching
+    // back to the Overworld later replayed a load this view can never satisfy.
+    setWorld(seedText, x, z, dim = 0) {
+      if (dim !== 0) { pending = null; return; }
       const seed = parseSeed(seedText);
       pending = { seed, x, z };
       if (shown) { apply(seed, x, z); pending = null; }

@@ -104,6 +104,43 @@ check('ground', 'nearest desert pyramid', near('desert_pyramid'), [[272, 9552]])
 check('ground', 'nearest stronghold', near('stronghold'), [[-1132, 852]]);
 check('ground', 'stronghold count', S.nearest(0, 0, 'stronghold', 999).targets.length, 128);
 
+// --- dimensions (Part 14) ---
+//
+// Regression, not ground truth: none of these positions has been checked against Chunkbase
+// yet. What IS asserted as ground truth is the dimension guard, because that is a property of
+// this code rather than of Minecraft.
+console.log('\ndimensions');
+for (const [name, d, biome] of [['nether', -1, 'nether_wastes'], ['end', 1, 'the_end']]) {
+  check('ground', `set_world accepts the ${name}`, eng.setWorld(BigInt.asUintN(64, 1n), mc, d), 0);
+  const p = M._malloc(4);
+  M.cwrap('gen_biomes', 'number', Array(8).fill('number'))(4, 0, 15, 0, 1, 1, 1, p);
+  check('regression', `${name} biome at origin`, eng.b2s(mc, M.HEAP32[p >> 2]), biome);
+  M._free(p);
+  // A type from another dimension must be refused, not silently return nothing.
+  const buf = M._malloc(64);
+  check('ground', `${name} refuses an Overworld structure type`,
+    eng.genStructures(eng.structureId('village'), -500, -500, 500, 500, buf, 8), -1);
+  M._free(buf);
+  const shb = M._malloc(16);
+  check('ground', `${name} refuses strongholds`, eng.genStrongholds(shb, 2), -1);
+  M._free(shb);
+}
+
+eng.setWorld(BigInt.asUintN(64, 1n), mc, -1);
+const NS = createStructures(eng);
+check('regression', 'nearest nether fortress',
+  NS.nearest(0, 0, 'fortress', 1).targets.map((t) => [t.x, t.z]), [[-96, 144]]);
+check('regression', 'nearest bastion',
+  NS.nearest(0, 0, 'bastion', 1).targets.map((t) => [t.x, t.z]), [[192, 0]]);
+
+eng.setWorld(BigInt.asUintN(64, 1n), mc, 1);
+const ES = createStructures(eng);
+check('regression', 'nearest end city',
+  ES.nearest(0, 0, 'end_city', 1).targets.map((t) => [t.x, t.z]), [[352, 992]]);
+
+// Leave the generator back in the Overworld for anything that follows.
+eng.setWorld(BigInt.asUintN(64, 1n), mc, 0);
+
 console.log('\ncalculators');
 check('regression', 'enchant table version', app.enchant_version(), MC);
 // Fortune III + Unbreaking III onto a blank pickaxe, cross-checked on a real 1.21.3 anvil.
