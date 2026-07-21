@@ -42,9 +42,9 @@ function loadWorld(seedText, x, z) {
   map3d.setWorld(seedText, x, z);
 }
 
-// Structure overlay (2D only for now — the 3D view has no marker path yet). All four types
-// are confirmed against Chunkbase on seed 1 / 1.21.3; they start off so a first load pays no
-// scan cost.
+// Structure overlay (2D only for now — the 3D view has no marker path yet). Village,
+// monument, mansion and stronghold are confirmed against Chunkbase on seed 1 / 1.21.3; the
+// other eleven are pending. All start off, so a first load pays no scan cost.
 $('struct-list').innerHTML = STRUCTURE_TYPES.map((t) =>
   `<label class="chk"><input type="checkbox" data-struct="${t.id}">` +
   `<span class="swatch" style="background:${t.color}"></span>${t.label}</label>`).join('');

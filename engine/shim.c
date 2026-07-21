@@ -182,16 +182,38 @@ int gen_biomes(int scale, int x, int y, int z, int sx, int sy, int sz, int *out)
 // in JS, for the same reason str2mc() exists: the enum is positional, so vendoring a newer
 // Cubiomes can renumber it underneath you.
 //
-// Deliberately narrow. Structure placement has changed across versions (salts, region sizes,
-// viability rules), so every type here is a type that has been checked. Adding a name is a
-// claim that it was verified — do not widen this list without doing that work.
+// Structure placement has changed across versions (salts, region sizes, viability rules), so
+// each type is a separate correctness claim and none is implied by the shared code path.
+//
+// VERIFIED against Chunkbase (seed 1 / 1.21.3): village, monument, mansion, stronghold.
+// PENDING verification: the other eleven. They use the identical two-step path, which is
+// reason to expect them to be right but is not evidence that they are.
+// Overworld only. The Nether and End types (Fortress, Bastion, Ruined_Portal_N, End_City,
+// End_Gateway, End_Island) are deliberately absent: gen_structures refuses a type whose
+// dimension does not match the loaded generator, and the map loads the Overworld
+// unconditionally. They belong to Part 14, not here.
+//
+// The per-chunk types (Treasure, Mineshaft, Desert_Well, Geode) are also left out, but for a
+// different reason — not cost, which is fine, but density. Geodes alone come in at ~620 per
+// default-zoom viewport, which is noise rather than information.
 EMSCRIPTEN_KEEPALIVE
 int structure_id(const char *name) {
     if (!name) return -1;
-    if (!strcmp(name, "village"))    return Village;
-    if (!strcmp(name, "monument"))   return Monument;
-    if (!strcmp(name, "mansion"))    return Mansion;
-    if (!strcmp(name, "stronghold")) return -2; // separate algorithm; see gen_strongholds
+    if (!strcmp(name, "village"))         return Village;
+    if (!strcmp(name, "outpost"))         return Outpost;
+    if (!strcmp(name, "desert_pyramid"))  return Desert_Pyramid;
+    if (!strcmp(name, "jungle_temple"))   return Jungle_Temple;
+    if (!strcmp(name, "swamp_hut"))       return Swamp_Hut;
+    if (!strcmp(name, "igloo"))           return Igloo;
+    if (!strcmp(name, "monument"))        return Monument;
+    if (!strcmp(name, "ocean_ruin"))      return Ocean_Ruin;
+    if (!strcmp(name, "shipwreck"))       return Shipwreck;
+    if (!strcmp(name, "mansion"))         return Mansion;
+    if (!strcmp(name, "ancient_city"))    return Ancient_City;
+    if (!strcmp(name, "trail_ruins"))     return Trail_Ruins;
+    if (!strcmp(name, "trial_chambers"))  return Trial_Chambers;
+    if (!strcmp(name, "ruined_portal"))   return Ruined_Portal;
+    if (!strcmp(name, "stronghold"))      return -2; // separate algorithm; see gen_strongholds
     return -1;
 }
 

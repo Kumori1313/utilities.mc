@@ -23,10 +23,24 @@
 
 /// Types offered, in draw order. `stronghold` is deliberately separate in the engine (rings,
 /// not regions) and is handled by its own path below.
+/// Colours are chosen to stay distinguishable *on top of biome colours*, which is why they
+/// are light and saturated rather than a conventional categorical palette — every marker also
+/// carries a dark outline for the same reason.
 export const STRUCTURE_TYPES = [
   { id: 'village', label: 'Villages', color: '#ffd28a' },
+  { id: 'outpost', label: 'Pillager outposts', color: '#ff8f6e' },
+  { id: 'desert_pyramid', label: 'Desert pyramids', color: '#ffe066' },
+  { id: 'jungle_temple', label: 'Jungle temples', color: '#7bd88f' },
+  { id: 'swamp_hut', label: 'Swamp huts', color: '#66c2a5' },
+  { id: 'igloo', label: 'Igloos', color: '#d6f0ff' },
   { id: 'monument', label: 'Ocean monuments', color: '#6ea8fe' },
+  { id: 'ocean_ruin', label: 'Ocean ruins', color: '#80deea' },
+  { id: 'shipwreck', label: 'Shipwrecks', color: '#b0bec5' },
   { id: 'mansion', label: 'Woodland mansions', color: '#d08bff' },
+  { id: 'ancient_city', label: 'Ancient cities', color: '#4fd1c5' },
+  { id: 'trail_ruins', label: 'Trail ruins', color: '#c9a66b' },
+  { id: 'trial_chambers', label: 'Trial chambers', color: '#ff6ec7' },
+  { id: 'ruined_portal', label: 'Ruined portals', color: '#e57373' },
   { id: 'stronghold', label: 'Strongholds', color: '#a6e9c4' },
 ];
 
