@@ -56,25 +56,13 @@ export const STRUCTURE_TYPES = [
   { id: 'fortress', label: 'Nether fortresses', color: '#ff8a80', dim: 'nether' },
   { id: 'bastion', label: 'Bastion remnants', color: '#cfa2ff', dim: 'nether' },
   { id: 'ruined_portal_n', label: 'Ruined portals', color: '#ffcc80', dim: 'nether' },
-  // End structures are WITHHELD pending verification, not forgotten.
-  //
-  // Every End city checked against Chunkbase on seed 1 / 1.21.3 was absent — (352, 992),
-  // (992, -560) and (96, -1168), three of three. That is a systematic disagreement, unlike the
-  // occasional low-lying Overworld false positive in 12.6, so the layer is not fit to draw.
-  //
-  // What is ruled out: the biome check passes (all three sit in end_midlands/end_highlands,
-  // which is what Cubiomes requires) and it is not void terrain alone — one of the three is
-  // over void by getEndSurfaceHeight, but the other two report solid land at y=57, the same as
-  // candidates far out. All three are near the inner edge of the outer End (1,053-1,172
-  // blocks); no far-out candidate has been checked yet, so it is unknown whether End cities
-  // are wrong everywhere or only near that boundary.
-  //
-  // End gateways go with them: they share the same untested End path and nothing about them
-  // has been checked at all.
-  //
-  // The shim still exposes both types; only the UI withholds them. Re-enable per type once a
-  // far-out position is confirmed.
-  // { id: 'end_city', label: 'End cities', color: '#e6d9ff', dim: 'end' },
+  // End cities were withheld for a while: the biome check alone put ~82% of them on terrain
+  // too low to generate, and every one checked was absent. The shim now applies Cubiomes' own
+  // End height model as a second gate (END_CITY_MIN_Y), which reproduces all 18 Chunkbase
+  // observations exactly, so they are back.
+  { id: 'end_city', label: 'End cities', color: '#e6d9ff', dim: 'end' },
+  // End gateways stay withheld — not because they failed, but because nothing about them has
+  // been checked and there is no reason to assume the city height rule applies to them.
   // { id: 'end_gateway', label: 'End gateways', color: '#b39ddb', dim: 'end' },
 ];
 

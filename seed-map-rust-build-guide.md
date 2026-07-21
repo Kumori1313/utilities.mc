@@ -1405,33 +1405,35 @@ Measure before planning here, because the split is not where it looks.
       right dimension's map. Nether fortresses in particular changed placement in 1.16; a check
       on the pinned version proves nothing about older ones once Part 13 lands.
 
-### End cities disagree with Chunkbase everywhere checked — layer withheld
+### End cities need a height gate as well as a biome check — resolved
 
-Three of three End cities checked on seed 1 / 1.21.3 were absent from Chunkbase: (352, 992),
-(992, -560) and (96, -1168). Unlike 12.6's occasional low-lying Overworld false positive, this
-is systematic, so the End layers are withheld from the UI rather than shipped with a caveat.
-The shim still exposes the types; only `STRUCTURE_TYPES` omits them, and the smoke test asserts
-they stay omitted so re-enabling has to be deliberate.
+`isViableStructurePos` checks only the biome, and for End cities that is badly insufficient:
+of 2,837 biome-viable candidates within 20k blocks of seed 1's origin, roughly 82% do not
+generate. The first three checked against Chunkbase were all absent, which is what exposed it.
 
-- **Not the biome check.** All three sit in `end_midlands`/`end_highlands`, exactly what
-  Cubiomes requires — it accepts those two and rejects `the_end`, `small_end_islands` and
-  `end_barrens`.
-- **Not void terrain alone.** Cubiomes does provide an End height model
-  (`getEndSurfaceHeight`), and of 2,837 viable candidates within 20k blocks, 375 sit over void.
-  One of the three failures is among them — but the other two report solid land at y=57, the
-  same as candidates far out that have not been checked.
-- **Untested variable: distance.** All three sit near the inner edge of the outer End
-  (1,053-1,172 blocks, just past the ~1,024 boundary where `the_end` gives way to island
-  biomes). No far-out candidate has been checked, so "wrong everywhere" and "wrong only near
-  that boundary" are both still open.
+The cause is the same independence Part 14 records elsewhere — since 1.18 biome assignment and
+terrain height come from separate noise systems, so a column reads `end_midlands` or
+`end_highlands` whether or not there is an island under it. 375 of those candidates sit over
+open void; many more sit on terrain simply too low.
 
-- [ ] **Resolve with one far-out check before re-enabling.** Pick candidates around 12k blocks
-      out, some on land and some over void by `getEndSurfaceHeight`, and compare. Land-present
-      plus void-absent would make the height model the missing filter — and using a function
-      Cubiomes ships is not the reverse-engineered heuristic 12.6 warns against. All-absent
-      would mean End city placement itself is wrong here and the layer should stay out.
-- [ ] End gateways are withheld alongside, not because they failed but because nothing about
-      them has been checked and they share the same untested path.
+**The fix uses Cubiomes' own End terrain model** (`getEndSurfaceHeight`), gating End cities at
+a surface height of **61**. This is not the reverse-engineered heuristic 12.6 refuses: there,
+no height model existed and a threshold would have been fitted to two cases; here the library
+ships the model and the constant was measured.
+
+- [x] **Narrow the threshold before trusting it.** A coarse split (absent ≤58, present ≥61)
+      leaves the value ambiguous across (58, 61], and the height distribution piles up exactly
+      there — 358 candidates at 59 and 282 at 60. Choosing wrongly inside that window would
+      have mis-drawn more than half the layer in one direction or the other, so candidates at
+      exactly 59 and 60 were checked specifically. Both absent; the threshold is 61.
+- [x] 18 Chunkbase observations now separate perfectly: present at 61, 63, 63, 63; absent at
+      60, 60, 59, 59, 58, 57, 57, 57, 56, 56 and three over void. All 18 are encoded in the
+      smoke test as ground truth, and moving the constant to 60 or 62 breaks it immediately.
+- [ ] **End gateways remain withheld.** Not because they failed — nothing about them has been
+      checked at all — and there is no reason to assume a city's height rule applies to them.
+- [ ] The same gap may exist for other types in other dimensions. The lesson generalises: where
+      Cubiomes exposes a terrain model for a dimension, a biome-only viability check is a
+      necessary condition, not a sufficient one.
 
 ## 14.4 — The 3D view stays Overworld
 

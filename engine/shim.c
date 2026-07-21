@@ -236,6 +236,27 @@ int structure_id(const char *name) {
     return -1;
 }
 
+// Minimum End surface height for an End city, in blocks.
+//
+// isViableStructurePos checks only the biome, and for End cities that is badly insufficient:
+// of 2,837 biome-viable candidates within 20k blocks of seed 1's origin, only ~18% actually
+// generate. The rest sit on terrain too low — including 375 over open void, where the biome is
+// still end_midlands or end_highlands because in 1.18+ biome assignment and terrain are
+// independent noise systems.
+//
+// 61 is measured, not guessed: 18 candidates were checked against Chunkbase on seed 1 /
+// 1.21.3, and they separate perfectly on this value. Every one at height >= 61 exists (61, 63,
+// 63, 63); every one at <= 60 does not (60, 60, 59, 59, 58, 57, 57, 57, 56, 56, and three over
+// void). The boundary was narrowed deliberately: candidates at exactly 59 and 60 were checked
+// once the coarse split was known, because the height distribution piles up there — 358 at 59
+// and 282 at 60 — so guessing within (58, 61] would have mis-drawn more than half the layer.
+//
+// getEndSurfaceHeight is Cubiomes' own End terrain model, not a heuristic invented here. That
+// is the difference from the low-lying desert-pyramid false positives in the guide's 12.6,
+// where no height model existed and a threshold would have been reverse-engineered from two
+// cases.
+#define END_CITY_MIN_Y 61
+
 // Region indices use Cubiomes' own floordiv (rng.h): region -1 must map to the region left
 // of the origin, not to region 0. Truncating toward zero would duplicate region 0 and drop
 // a region on each negative axis — the same trap the tile math documents.
@@ -272,6 +293,10 @@ int gen_structures(int stype, int x0, int z0, int x1, int z1, int *out, int max_
             if (!getStructurePos(stype, g.mc, g.seed, rx, rz, &p)) continue;
             if (p.x < x0 || p.x > x1 || p.z < z0 || p.z > z1) continue;
             if (!isViableStructurePos(stype, &g, p.x, p.z, 0)) continue;
+            // Second gate, End cities only: the biome check passes over void and low terrain
+            // where no city generates. See END_CITY_MIN_Y.
+            if (stype == End_City
+                && getEndSurfaceHeight(g.mc, g.seed, p.x, p.z) < END_CITY_MIN_Y) continue;
             if (n >= max_pairs) return -2;
             out[n * 2] = p.x;
             out[n * 2 + 1] = p.z;

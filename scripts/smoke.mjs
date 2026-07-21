@@ -133,11 +133,34 @@ check('regression', 'nearest nether fortress',
 check('regression', 'nearest bastion',
   NS.nearest(0, 0, 'bastion', 1).targets.map((t) => [t.x, t.z]), [[192, 0]]);
 
-// No End city assertion: every one checked against Chunkbase was absent, so the layer is
-// withheld from the UI. Pinning its output would enshrine a result known to be wrong.
-// Instead, assert it stays withheld, so re-enabling it is a deliberate act that trips a test.
-check('ground', 'End structure types are withheld pending verification',
-  STRUCTURE_TYPES.filter((t) => t.dim === 'end').map((t) => t.id), []);
+// Every End city position checked against Chunkbase on seed 1 / 1.21.3, encoded as a set. The
+// biome check alone accepts all 18; the shim's height gate (END_CITY_MIN_Y) is what separates
+// them, so this is the test that pins that constant. Shifting it one block either way — the
+// height distribution has 358 candidates at 59 and 282 at 60 — breaks these immediately.
+eng.setWorld(BigInt.asUintN(64, 1n), mc, 1);
+const END_PRESENT = [[32, -12736], [-3120, -12704], [5840, -12768], [-1872, -12032]];
+const END_ABSENT = [
+  [368, -12736], [2960, -12736], [-11136, -12784], [-1552, -12704], [352, 992],
+  [992, -560], [96, -1168], [-7952, -12736], [-6000, -12736], [-4736, -12784],
+  [-10512, -12704], [1024, -12752], [-12688, -12768], [-6688, -12720],
+];
+const cityAt = (x, z) => {
+  const ptr = M._malloc(16 * 2 * 4);
+  const n = eng.genStructures(eng.structureId('end_city'), x - 8, z - 8, x + 8, z + 8, ptr, 16);
+  let hit = false;
+  if (n > 0) {
+    const a = M.HEAP32.subarray(ptr >> 2, (ptr >> 2) + n * 2);
+    for (let i = 0; i < n; i++) if (a[i * 2] === x && a[i * 2 + 1] === z) hit = true;
+  }
+  M._free(ptr);
+  return hit;
+};
+check('ground', 'End cities Chunkbase shows are reported',
+  END_PRESENT.filter(([x, z]) => !cityAt(x, z)), []);
+check('ground', 'End cities Chunkbase does not show are filtered out',
+  END_ABSENT.filter(([x, z]) => cityAt(x, z)), []);
+check('ground', 'End gateways remain withheld pending verification',
+  STRUCTURE_TYPES.filter((t) => t.dim === 'end').map((t) => t.id), ['end_city']);
 
 // Leave the generator back in the Overworld for anything that follows.
 eng.setWorld(BigInt.asUintN(64, 1n), mc, 0);
