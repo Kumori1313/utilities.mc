@@ -1227,15 +1227,28 @@ Ruled out, each by direct test rather than argument:
   property of an unexamined population as verified is precisely the error this guide keeps
   warning about, and it was made here.
 
-  With a third data point the terrain signal is strong. Ranking all 29 viable desert pyramids
-  within ~12k blocks by terrain height at their position: the two Chunkbase does **not** show
-  rank 2nd (y=59) and 6th (y=65); the one it does show ranks 27th (y=80). Sea level is 63. In
-  1.18+ biome assignment and terrain height are separate noise systems, so a column can be
-  "desert" by biome while its terrain sits at or below sea level — underwater, where no pyramid
-  generates. Cubiomes checks only the biome and so calls it viable.
+  Tested properly, terrain is the discriminator. Six predicted cases were checked against
+  Chunkbase and **all six matched the prediction**, giving nine data points that separate
+  perfectly on terrain height with a clean gap:
 
-  **This is a hypothesis with a falsifiable prediction, not a conclusion**: low-lying candidates
-  should be absent and high ones present. Test it before acting on it.
+  | Chunkbase | terrain y at the position |
+  |---|---|
+  | absent | 69, 65, 62, 59, 59 |
+  | present | 86, 80, 78, 77 |
+
+  Biome is definitively *not* the cause: all nine read `desert` at every sampled y, including
+  at y=319 where Cubiomes checks, at the real surface, and at y=64.
+
+  The mechanism is submersion, but of the **footprint**, not the centre — a first pass guessed
+  "centre below sea level" and that is wrong, since two absent cases sit at 69 and 65, above
+  the sea level of 63. Sampling the 21x21 pyramid footprint, every absent case dips below sea
+  level somewhere (minima 55, 52, ~62, 52, 61) while every present case stays clear (81, 72,
+  74, 78). A pyramid does not generate partly submerged; Cubiomes checks only the biome, and in
+  1.18+ biome and terrain height are independent noise systems, so a column reads `desert`
+  regardless of whether its terrain is above water.
+
+- [ ] **Even with the mechanism understood, do not implement it as a height filter yet** — the
+      height model is not accurate enough to drive one. See the accuracy correction below.
 
 What remains is the documented scope of the check itself: finders.h describes
 `isViableStructurePos` as performing *"a biome check ... to determine whether a structure
