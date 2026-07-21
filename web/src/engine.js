@@ -39,6 +39,12 @@ export async function boot() {
     biomeAt: Module.cwrap('get_biome_at', 'number', ['number', 'number', 'number', 'number']),
     biome2str: Module.cwrap('biome2str', 'string', ['number', 'number']),
     str2mc: Module.cwrap('str2mc', 'number', ['string']),
+    // Structures (12.4). Resolve the type through structure_id rather than hardcoding the
+    // enum value: StructureType is positional, so a Cubiomes bump can renumber it.
+    structureId: Module.cwrap('structure_id', 'number', ['string']),
+    genStructures: Module.cwrap('gen_structures', 'number',
+                                ['number', 'number', 'number', 'number', 'number', 'number', 'number']),
+    genStrongholds: Module.cwrap('gen_strongholds', 'number', ['number', 'number']),
     M: Module,
   };
 

@@ -7,7 +7,9 @@
 //!
 //! It relies on the engine's global generator already being seeded (the orchestrator calls
 //! `engine.setWorld` before `setWorld` here). Navigation is drag-to-pan (12.3) plus
-//! zoom-toward-the-cursor.
+//! zoom-toward-the-cursor. Structure markers (12.4) are drawn over the biome image.
+
+import { STRUCTURE_TYPES } from './structures.js';
 
 // Zoom is a continuous blocks-per-pixel value, not a ladder of fixed stops. The wheel scales
 // it exponentially, so one notch is the same ratio at every level and a trackpad's many small
@@ -63,8 +65,16 @@ const MAX_TILES = 1024;
 // cold view fills in progressively instead of blocking on a few hundred milliseconds of work.
 const FRAME_BUDGET_MS = 8;
 
-export function create2D({ canvas, engine, palette, mcVersion, ui }) {
+// Separate, smaller budget for structure scanning, which is a different cost curve entirely
+// (a biome viability check per region, not per cell) and must not starve tile generation.
+const STRUCT_BUDGET_MS = 4;
+
+export function create2D({ canvas, engine, palette, mcVersion, ui, structures }) {
   const ctx = canvas.getContext('2d');
+  const markerColor = new Map(STRUCTURE_TYPES.map((t) => [t.id, t.color]));
+  const markerLabel = new Map(STRUCTURE_TYPES.map((t) => [t.id, t.label.replace(/s$/, '')]));
+  let showTypes = new Set(); // structure types the user has enabled
+  let markers = []; // last drawn markers, with screen positions, for hover
 
   let bpp = DEFAULT_BPP; // blocks per screen pixel — the single source of truth for zoom
   let cx = 0, cz = 0; // world-block coordinate at the canvas centre
@@ -166,6 +176,33 @@ export function create2D({ canvas, engine, palette, mcVersion, ui }) {
     ctx.drawImage(tile.canvas, 0, 0, TILE_CELLS, TILE_CELLS, x0, y0, x1 - x0, y1 - y0);
   }
 
+  /// Overlay structure markers for the enabled types. Scanning shares the frame budget with
+  /// tile generation, and unscanned ground schedules another frame rather than stalling this
+  /// one — the same progressive fill the tiles use.
+  function drawMarkers(w, h) {
+    markers = [];
+    if (showTypes.size === 0 || !structures.enabledAt(w * bpp)) return;
+
+    const x0 = Math.floor(cx - (w / 2) * bpp), x1 = Math.ceil(cx + (w / 2) * bpp);
+    const z0 = Math.floor(cz - (h / 2) * bpp), z1 = Math.ceil(cz + (h / 2) * bpp);
+    const { found, pending } = structures.inBox(x0, z0, x1, z1, [...showTypes], STRUCT_BUDGET_MS);
+
+    for (const s of found) {
+      const px = w / 2 + (s.x - cx) / bpp;
+      const py = h / 2 + (s.z - cz) / bpp;
+      markers.push({ ...s, px, py });
+      // Dark outline so the marker reads against any biome colour underneath.
+      ctx.beginPath();
+      ctx.arc(px, py, 4.5, 0, Math.PI * 2);
+      ctx.fillStyle = markerColor.get(s.type) ?? '#fff';
+      ctx.fill();
+      ctx.lineWidth = 1.5;
+      ctx.strokeStyle = '#000000cc';
+      ctx.stroke();
+    }
+    if (pending > 0) scheduleDraw();
+  }
+
   function draw() {
     const w = canvas.clientWidth, h = canvas.clientHeight;
     if (w === 0 || h === 0) return; // hidden
@@ -209,6 +246,8 @@ export function create2D({ canvas, engine, palette, mcVersion, ui }) {
       }
       if (generated < missing.length) scheduleDraw(); // keep filling next frame
     }
+
+    drawMarkers(w, h);
 
     // Centre crosshair, so the coordinate readout has a visible anchor.
     ctx.strokeStyle = '#ffffff88';
@@ -273,7 +312,21 @@ export function create2D({ canvas, engine, palette, mcVersion, ui }) {
       return; // skip hover: the readout would lag a frame behind the pan anyway
     }
     const r = canvas.getBoundingClientRect();
-    const { x: wx, z: wz } = screenToWorld(e.clientX - r.left, e.clientY - r.top);
+    const mx = e.clientX - r.left, my = e.clientY - r.top;
+
+    // A marker under the cursor wins over the biome readout — it is the more specific answer,
+    // and it is the only way to read a structure's exact coordinate.
+    let near = null, nearD = 10; // px
+    for (const m of markers) {
+      const d = Math.hypot(m.px - mx, m.py - my);
+      if (d < nearD) { nearD = d; near = m; }
+    }
+    if (near) {
+      ui.hoverEl.textContent = `${markerLabel.get(near.type) ?? near.type} — ${near.x}, ${near.z}`;
+      return;
+    }
+
+    const { x: wx, z: wz } = screenToWorld(mx, my);
     const scale = lastScale;
     const cellX = Math.floor(wx / scale), cellZ = Math.floor(wz / scale);
     const tx = Math.floor(cellX / TILE_CELLS), tz = Math.floor(cellZ / TILE_CELLS);
@@ -309,8 +362,14 @@ export function create2D({ canvas, engine, palette, mcVersion, ui }) {
       // world change is a silent wrong-biome bug that looks exactly like correct output, so
       // the cache is dropped wholesale — the same rule the Rust tile cache enforces.
       tiles.clear();
+      structures.setWorld(); // same rule: a structure list from the old world looks correct
       cx = x; cz = z;
       dirty = true;
+      if (shown) draw();
+    },
+    /// Which structure types to overlay. Re-renders immediately.
+    setStructureTypes(set) {
+      showTypes = new Set(set);
       if (shown) draw();
     },
     show() {

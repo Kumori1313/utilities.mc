@@ -7,6 +7,7 @@ import { create2D } from './map2d.js';
 import { create3D } from './map3d.js';
 import { setupEnchant } from './enchant-ui.js';
 import { setupPortal } from './portal-ui.js';
+import { createStructures, STRUCTURE_TYPES } from './structures.js';
 
 const $ = (id) => document.getElementById(id);
 const setStatus = (msg, cls = '') => { const s = $('status'); s.textContent = msg; s.className = cls; };
@@ -28,7 +29,8 @@ setupPortal($('view-portal'), app);
 
 // --- seed maps --------------------------------------------------------------
 const ui = { setStatus, statsEl: $('stats'), hoverEl: $('hover') };
-const map2d = create2D({ canvas: $('view2d'), engine, palette, mcVersion, ui });
+const structures = createStructures(engine);
+const map2d = create2D({ canvas: $('view2d'), engine, palette, mcVersion, ui, structures });
 const map3d = create3D({ canvas: $('view3d'), engine, View, palette, mcVersion, ui });
 
 // Both renderers share the engine's single generator, so seed it once here, then hand the
@@ -39,6 +41,20 @@ function loadWorld(seedText, x, z) {
   map2d.setWorld(seedText, x, z);
   map3d.setWorld(seedText, x, z);
 }
+
+// Structure overlay (2D only for now — the 3D view has no marker path yet). Types start off
+// so a first load pays no scan cost, and each is verified independently.
+$('struct-list').innerHTML = STRUCTURE_TYPES.map((t) =>
+  `<label class="chk"><input type="checkbox" data-struct="${t.id}">` +
+  `<span class="swatch" style="background:${t.color}"></span>${t.label}</label>`).join('');
+function syncStructures() {
+  const on = [...document.querySelectorAll('#struct-list input:checked')].map((i) => i.dataset.struct);
+  map2d.setStructureTypes(on);
+  $('struct-hint').textContent = on.length
+    ? `shown when the view is under ${structures.maxBlocksAcross.toLocaleString()} blocks wide`
+    : '';
+}
+$('struct-list').addEventListener('change', syncStructures);
 
 // Render distance (3D). JS holds the source of truth: a range input laid out while
 // display:none can corrupt its own `value` property to its max, so we never read the
@@ -57,6 +73,7 @@ function setMode(mode) {
   $('view2d').classList.toggle('hidden', mode !== '2d');
   $('view3d').classList.toggle('hidden', mode !== '3d');
   $('rdist-wrap').classList.toggle('hidden', mode !== '3d');
+  $('structs').classList.toggle('hidden', mode !== '2d');
   $('map2d-hint').classList.toggle('hidden', mode !== '2d');
   $('map3d-hint').classList.toggle('hidden', mode !== '3d');
   document.querySelectorAll('#map-mode button').forEach((b) =>

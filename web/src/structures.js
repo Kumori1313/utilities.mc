@@ -1,0 +1,145 @@
+//! Structure locating and caching (Part 12.4).
+//!
+//! Wraps the engine's `gen_structures` / `gen_strongholds` with the two things a map needs
+//! and the raw calls do not provide: a cache, so panning does not rescan ground already
+//! scanned, and a zoom cutoff, so a zoomed-out view does not ask for a scan it cannot afford.
+//!
+//! # Why the cutoff exists
+//!
+//! A scan is not proportional to the number of structures found — it is proportional to the
+//! regions covered, each of which pays a biome viability check. Measured on this engine at
+//! seed 1, scanning for monuments costs ~2 ms across a 1,920-block box, 158 ms across 30,720
+//! blocks, and 2,328 ms across 122,880. Villages overflow an 8k-pair buffer at that size.
+//! Rendering markers at full zoom-out is therefore not a thing to optimise later; it is a
+//! thing not to do.
+//!
+//! # Correctness
+//!
+//! Everything here trusts the shim's two-step (candidate then viability check). The one
+//! subtlety at this layer is that scanning by box, and filtering returned positions to that
+//! box, is exactly complete: a structure at position P in region R is found when scanning the
+//! box containing P, because P lies in both R and that box, so R necessarily overlaps it.
+//! No structure is missed at a boundary and none is reported twice.
+
+/// Types offered, in draw order. `stronghold` is deliberately separate in the engine (rings,
+/// not regions) and is handled by its own path below.
+export const STRUCTURE_TYPES = [
+  { id: 'village', label: 'Villages', color: '#ffd28a' },
+  { id: 'monument', label: 'Ocean monuments', color: '#6ea8fe' },
+  { id: 'mansion', label: 'Woodland mansions', color: '#d08bff' },
+  { id: 'stronghold', label: 'Strongholds', color: '#a6e9c4' },
+];
+
+/// Scan granularity. Each cell is scanned at most once per world and cached whole, so a pan
+/// only pays for newly exposed cells. 2048 blocks is ~1-2 ms per cell per type, small enough
+/// to fit several into a frame budget.
+const GRID = 2048;
+
+/// Widest view, in blocks, that still draws markers. Above this the scan cost climbs into
+/// hundreds of milliseconds (see the module note) and the markers would be too dense to read
+/// anyway.
+const MAX_BLOCKS_ACROSS = 12_288;
+
+/// Pair capacity for one grid-cell scan. A 2048-block cell holds at most a handful of any
+/// type; this is slack, not a limit that should ever bind.
+const SCAN_CAP = 256;
+
+/// Strongholds in a modern world. The engine returns 128; this is headroom for a version
+/// that returns fewer.
+const STRONGHOLD_CAP = 200;
+
+export function createStructures(engine) {
+  const cache = new Map(); // "type:gx:gz" -> [[x, z], ...]
+  let strongholds = null; // whole-world, fetched once per seed
+
+  const ids = new Map();
+  const typeId = (type) => {
+    if (!ids.has(type)) ids.set(type, engine.structureId(type));
+    return ids.get(type);
+  };
+
+  /// Scan one grid cell for one type and cache it. Returns the positions found.
+  function scanCell(type, gx, gz) {
+    const key = `${type}:${gx}:${gz}`;
+    const hit = cache.get(key);
+    if (hit) return hit;
+
+    const x0 = gx * GRID, z0 = gz * GRID;
+    const ptr = engine.M._malloc(SCAN_CAP * 2 * 4);
+    const n = engine.genStructures(typeId(type), x0, z0, x0 + GRID - 1, z0 + GRID - 1, ptr, SCAN_CAP);
+    const found = [];
+    if (n > 0) {
+      const a = engine.M.HEAP32.subarray(ptr >> 2, (ptr >> 2) + n * 2);
+      for (let i = 0; i < n; i++) found.push([a[i * 2], a[i * 2 + 1]]);
+    }
+    engine.M._free(ptr);
+    // n < 0 means the engine refused (type absent in this version, or wrong dimension) or the
+    // buffer filled. Cache the empty result either way: retrying every frame would turn a
+    // refusal into a per-frame cost, and the condition does not change between frames.
+    cache.set(key, found);
+    return found;
+  }
+
+  function allStrongholds() {
+    if (strongholds) return strongholds;
+    const ptr = engine.M._malloc(STRONGHOLD_CAP * 2 * 4);
+    const n = engine.genStrongholds(ptr, STRONGHOLD_CAP);
+    strongholds = [];
+    if (n > 0) {
+      const a = engine.M.HEAP32.subarray(ptr >> 2, (ptr >> 2) + n * 2);
+      for (let i = 0; i < n; i++) strongholds.push([a[i * 2], a[i * 2 + 1]]);
+    }
+    engine.M._free(ptr);
+    return strongholds;
+  }
+
+  return {
+    /// Drop every cached scan. Must be called on any seed/version/dimension change — a
+    /// structure list from the previous world would render as confidently as a correct one.
+    setWorld() {
+      cache.clear();
+      strongholds = null;
+    },
+
+    /// True if the view is tight enough for markers to be drawn at all.
+    enabledAt(blocksAcross) {
+      return blocksAcross <= MAX_BLOCKS_ACROSS;
+    },
+
+    maxBlocksAcross: MAX_BLOCKS_ACROSS,
+
+    /// Structures of the given types inside a block box.
+    ///
+    /// Scanning is bounded by `budgetMs`; cells left unscanned are reported as `pending` so
+    /// the caller can redraw and continue, exactly as the tile renderer does. Returns
+    /// `{ found: [{ type, x, z }], pending }`.
+    inBox(x0, z0, x1, z1, types, budgetMs) {
+      const found = [];
+      let pending = 0;
+
+      for (const type of types) {
+        if (type === 'stronghold') {
+          for (const [x, z] of allStrongholds()) {
+            if (x >= x0 && x <= x1 && z >= z0 && z <= z1) found.push({ type, x, z });
+          }
+          continue;
+        }
+        for (let gz = Math.floor(z0 / GRID); gz <= Math.floor(z1 / GRID); gz++) {
+          for (let gx = Math.floor(x0 / GRID); gx <= Math.floor(x1 / GRID); gx++) {
+            const key = `${type}:${gx}:${gz}`;
+            if (!cache.has(key)) {
+              if (budgetMs <= 0) { pending++; continue; }
+              const started = performance.now();
+              scanCell(type, gx, gz);
+              budgetMs -= performance.now() - started;
+            }
+            for (const [x, z] of cache.get(key)) {
+              if (x >= x0 && x <= x1 && z >= z0 && z <= z1) found.push({ type, x, z });
+            }
+          }
+        }
+      }
+      return { found, pending };
+    },
+  };
+}

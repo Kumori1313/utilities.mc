@@ -21,7 +21,9 @@
 #include <limits.h>
 #include <math.h>
 #include "cubiomes/generator.h"
+#include "cubiomes/finders.h"
 #include "cubiomes/util.h"
+#include <string.h>
 
 // One generator for the whole module, seeded via set_world().
 //
@@ -172,4 +174,98 @@ int gen_biomes(int scale, int x, int y, int z, int sx, int sy, int sz, int *out)
 
     Range r = { scale, x, z, sx, sz, y, sy };
     return genBiomes(&g, out, r);
+}
+
+// ---- structures (Part 12.4) -------------------------------------------------------------
+
+// Resolve a structure name to Cubiomes' StructureType. Prefer this over hardcoding the int
+// in JS, for the same reason str2mc() exists: the enum is positional, so vendoring a newer
+// Cubiomes can renumber it underneath you.
+//
+// Deliberately narrow. Structure placement has changed across versions (salts, region sizes,
+// viability rules), so every type here is a type that has been checked. Adding a name is a
+// claim that it was verified — do not widen this list without doing that work.
+EMSCRIPTEN_KEEPALIVE
+int structure_id(const char *name) {
+    if (!name) return -1;
+    if (!strcmp(name, "village"))    return Village;
+    if (!strcmp(name, "monument"))   return Monument;
+    if (!strcmp(name, "mansion"))    return Mansion;
+    if (!strcmp(name, "stronghold")) return -2; // separate algorithm; see gen_strongholds
+    return -1;
+}
+
+// Region indices use Cubiomes' own floordiv (rng.h): region -1 must map to the region left
+// of the origin, not to region 0. Truncating toward zero would duplicate region 0 and drop
+// a region on each negative axis — the same trap the tile math documents.
+//
+// Confirmed structure positions inside a block-coordinate box, as (x,z) pairs.
+//
+// Two steps, and the second is the one that matters. getStructurePos returns where a
+// structure would be ATTEMPTED in a region; isViableStructurePos checks whether the biome
+// and terrain there actually permit it. Returning candidates unchecked paints structures
+// that are not in the world — output that looks entirely plausible and is wrong, the same
+// failure mode as the y=0 cave-biome bug.
+//
+// Region size comes from getStructureConfig for the loaded version, never hardcoded: it
+// varies by structure type AND by version.
+//
+// `out` receives up to max_pairs (x,z) pairs. Returns the count written, -1 on error, or
+// -2 if the buffer filled before the box was covered.
+EMSCRIPTEN_KEEPALIVE
+int gen_structures(int stype, int x0, int z0, int x1, int z1, int *out, int max_pairs) {
+    if (!g_ready || !out || max_pairs <= 0) return -1;
+    if (x1 < x0 || z1 < z0) return -1;
+
+    StructureConfig sc;
+    if (!getStructureConfig(stype, g.mc, &sc)) return -1; // type absent in this version
+    if (sc.dim != g.dim) return -1;                       // wrong dimension loaded
+
+    int span = sc.regionSize * 16; // regionSize is in chunks
+    if (span <= 0) return -1;
+
+    int n = 0;
+    for (int rz = floordiv(z0, span); rz <= floordiv(z1, span); rz++) {
+        for (int rx = floordiv(x0, span); rx <= floordiv(x1, span); rx++) {
+            Pos p;
+            if (!getStructurePos(stype, g.mc, g.seed, rx, rz, &p)) continue;
+            if (p.x < x0 || p.x > x1 || p.z < z0 || p.z > z1) continue;
+            if (!isViableStructurePos(stype, &g, p.x, p.z, 0)) continue;
+            if (n >= max_pairs) return -2;
+            out[n * 2] = p.x;
+            out[n * 2 + 1] = p.z;
+            n++;
+        }
+    }
+    return n;
+}
+
+// Stronghold positions as (x,z) pairs, nearest-first from the origin.
+//
+// Strongholds are NOT placed one-per-region: they sit in rings (3 in the first, then 6, 10,
+// ...) and are found by iteration, so they cannot be folded into the region loop above.
+// There are ~128 in a modern world and they do not depend on the view, so the caller can
+// fetch the lot once and filter locally.
+//
+// TEST THE RETURN BEFORE USING THE POSITION. finders.h documents nextStronghold as returning
+// "the number of further strongholds after this one", but the implementation increments
+// sh->index before returning `128 - (index-1)` — i.e. the count INCLUDING the one just
+// resolved. Recording first and testing after, as that comment invites, therefore resolves a
+// phantom 129th stronghold: a plausible position, at a plausible ring distance, that is not
+// in the game. Checked: this loop yields 128, the real count for MC >= 1.9.
+EMSCRIPTEN_KEEPALIVE
+int gen_strongholds(int *out, int max_pairs) {
+    if (!g_ready || !out || max_pairs <= 0) return -1;
+    if (g.dim != DIM_OVERWORLD) return -1;
+
+    StrongholdIter sh;
+    initFirstStronghold(&sh, g.mc, g.seed);
+    int n = 0;
+    while (n < max_pairs) {
+        if (nextStronghold(&sh, &g) <= 0) break;
+        out[n * 2] = sh.pos.x;
+        out[n * 2 + 1] = sh.pos.z;
+        n++;
+    }
+    return n;
 }
