@@ -975,3 +975,140 @@ orbit-end event.
       so meshing happens off the main thread. The worker is real work — do not front-load it.
 - [ ] Optional: frustum-bias the tiling so you mesh tiles **ahead** of the camera preferentially,
       spending the tile budget on what the player is flying toward rather than a symmetric radius.
+
+# Part 13 — Version Targeting
+
+Let the user choose which Minecraft version the seed map and the enchantment calculator model,
+including the items, enchantments, and rules that version actually had.
+
+Start by reading where the two halves already stand, because they could hardly be further
+apart and the work splits accordingly:
+
+- **The seed map is already version-parameterised, end to end.** `set_world(seed, mc_version,
+  dim)` takes a version int and validates it against Cubiomes' `MC_B1_7..MC_NEWEST`; `str2mc`
+  converts a string to that enum; and the Rust tile cache already carries `version` in its
+  `World` key, so changing it invalidates every cached tile. The *only* thing pinning the app
+  to one version is a single hardcoded line in the frontend. This part is mostly UI.
+- **The enchantment calculator is welded to one version at compile time.** `build.rs` reads
+  exactly one file, `data/enchantments-1.21.3.json`, and emits a `MC_VERSION` const plus a
+  fixed-size `[EnchantmentData; 42]`. There is no runtime notion of a version at all. This is
+  the real work of Part 13, and most of it is data, not code.
+
+Order below reflects that: the cheap half first to establish the UI shape, then the data
+layer, then the logic that the data cannot express, then verification.
+
+## 13.1 — Decide the version model before writing any of it
+
+The tempting design — one global version selector at the top of the app — is wrong, and it is
+much cheaper to reject it now than to unpick it later.
+
+- [ ] **Landmine — the two halves support different sets of versions, and always will.** The
+      seed map can offer whatever the vendored Cubiomes knows (beta 1.7 through `MC_NEWEST`).
+      The calculator can offer only versions you have transcribed a dataset for — realistically
+      a handful. A single global selector claims parity that does not exist, and will either
+      hide seed-map versions that work or offer calculator versions that silently fall back.
+- [ ] **Per-tool version selectors, one shared registry.** Keep a single source of truth listing
+      known versions and, per version, which features support it. Each tool renders its own
+      selector from that registry, filtered to what it can actually serve.
+- [ ] **Landmine — version strings are no longer `1.x.y`.** Minecraft's newer releases use a
+      date-style scheme (26.1, 26.2, …). Any comparison, sorting, or "is this at least X" check
+      written as a `1.MAJOR.MINOR` parse will mis-order these or reject them outright. Treat the
+      version as an opaque key into the registry, and store an explicit sort order.
+- [ ] Decide and write down what happens to in-flight UI state when the version changes — see
+      13.5. Doing this last is how you end up with a calculator showing an item the selected
+      version never had.
+
+## 13.2 — Seed map version selector
+
+Nearly free; do it first to prove the registry and the selector UI.
+
+- [ ] Replace the hardcoded `str2mc('1.21.3')` in the frontend with a dropdown bound to the
+      registry. On change, call the engine's `set_world` **and** the Rust `View::set_world`, then
+      force a full re-render.
+- [ ] **Landmine — two `set_world`s, and only one of them clears the cache.** The engine shim
+      holds the C `Generator`; the Rust `View` holds the tile cache. Calling only the engine's
+      leaves every cached tile generated under the *previous* version, and stale biome tiles look
+      exactly like correct output. The cache already keys on `version` — the bug is failing to
+      tell it.
+- [ ] **Validate before use.** `set_world` returns -1 outside `MC_B1_7..MC_NEWEST`, and `str2mc`
+      on an unrecognised string does not return a usable version. Check both; do not feed the
+      result straight into a generate call.
+- [ ] **Landmine — you cannot offer a version newer than the vendored Cubiomes knows.**
+      `MC_NEWEST` is a compile-time ceiling from the vendored C source. Supporting a newer
+      Minecraft means updating the Cubiomes vendor, which is a dependency bump with its own
+      re-verification pass (Part 8 against Chunkbase, pinned to the new version) — not a registry
+      entry. Cap the offered list at what the build actually contains.
+- [ ] Re-run a handful of Part 8 Chunkbase spot-checks **per offered version**, not once. Biome
+      generation changed substantially across versions (1.18 in particular); a check that passes
+      on 1.21.3 says nothing about 1.16.
+
+## 13.3 — Multi-version enchantment data
+
+The bulk of the work, and it is transcription plus codegen rather than algorithms.
+
+- [ ] **One dataset file per version**, each carrying its own `_provenance` block exactly as the
+      current file does. `build.rs` globs the data directory instead of naming one file, and emits
+      one table module per version plus a lookup from version string to table.
+- [ ] **Landmine — `ENCHANTMENTS` is a fixed-size `[EnchantmentData; 42]`.** That count is
+      1.21.3's. It must become a slice (`&'static [EnchantmentData]`) before a second version can
+      exist, and every consumer that assumed a fixed length or a compile-time-known index follows.
+- [ ] **Landmine — enchantment indices are version-scoped, and nothing in the type system says
+      so.** `exclusive_with` is `&[usize]` into *its own* table; `index_of` returns a position in
+      *a* table; `optimal_plan` takes `(usize, i32)` pairs. Mix an index resolved under one
+      version with a table from another and you get a real enchantment with the wrong identity —
+      no error, just a wrong answer. Resolve names to indices once per request, against the
+      selected version's table, and never cache an index across a version change. The UI already
+      keys its selection map by **name**, which is the right shape; keep it that way.
+- [ ] Make the version an explicit parameter of the public surface (`offered_levels`,
+      `enchantments_in_slot`, `enchant_applicable`, `anvil_optimize`, …) rather than a mutable
+      global. A global "current version" invites exactly the cross-version index bug above, and
+      makes the crate's tests order-dependent.
+- [ ] **Landmine — a second dataset is a second chance to make transcription errors, with no
+      cross-check.** Part 10.2's rule (two independent transcriptions, diffed) was what caught the
+      original errors; it applies per version. Do not hand-edit a copy of the 1.21.3 file into a
+      new version — that produces a file that looks plausible and shares every one of the original's
+      mistakes while adding new ones.
+- [ ] Generate golden vectors per version from a JDK matching **that** version, per 10.5. Vectors
+      from one version do not validate another.
+
+## 13.4 — Version-dependent logic, not just data
+
+The tables express what exists; they do not express how it behaves. Assume nothing here is
+version-independent merely because it currently passes for 1.21.3.
+
+- [ ] **Audit each rule for version sensitivity, and record the finding either way.** The roll
+      path (offered levels, the enchantability modifier, the ±15% triangular bonus, the
+      book-loses-one-enchantment draw) and the anvil path (the `2^n - 1` prior-work penalty, the
+      item-vs-book multiplier, the survival "too expensive" limit) each need a verdict: verified
+      identical across the versions you offer, or version-gated. An unexamined rule is not the
+      same as an unchanged one.
+- [ ] **Landmine — content changes silently shift the roll.** The weighted pick walks the
+      applicable enchantment list, so adding or removing an enchantment from a version changes
+      which one a given seed lands on — even for enchantments that themselves did not change. The
+      1.21 mace enchantments (density, breach, wind burst) are in the current dataset and are
+      exactly this kind of change. This is why per-version golden vectors are non-negotiable.
+- [ ] **Landmine — the anvil cross-checks were version-spanning by luck, not by design.** The
+      hand-verified anvil results matched on both 1.21.3 and 26.2, which is evidence those
+      mechanics are stable across that gap — not evidence that they are stable everywhere. Older
+      versions are the risk.
+- [ ] Where a rule genuinely differs, gate it on the version explicitly at the call site rather
+      than branching deep inside a helper, so the difference is visible when reading the
+      algorithm.
+
+## 13.5 — UI wiring, state migration, and verification
+
+- [ ] **Surface the active version in each tool**, replacing the single global `MC_VERSION`
+      readout. A user cross-checking against a wiki needs to know which version's rules produced
+      the number in front of them.
+- [ ] **Landmine — selected state may not exist in the newly chosen version.** Switching versions
+      can strand a selected item or enchantment that the target version never had (or that was
+      removed from it). The item and enchantment dropdowns are already generated from the data, so
+      they will re-render correctly on their own — the failure is the *retained selection* behind
+      them. Drop what no longer applies and say so, rather than silently computing against a
+      substitute. The anvil grid already drops selections that do not apply to the chosen item;
+      extend that same pass to a version change.
+- [ ] Default to the newest version both halves support, so the common case needs no interaction.
+- [ ] **Verify per version, not once.** Every claim in Parts 8 and 10 is a claim about one
+      version. Re-run the Chunkbase spot-checks, the external enchantment-calculator comparison,
+      and the real-anvil check against each version you offer, and treat any version you have not
+      checked as unverified — including in the UI, if you ship it anyway.
