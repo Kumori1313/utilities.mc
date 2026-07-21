@@ -6,8 +6,8 @@
 //! mesh and the right default.
 //!
 //! It relies on the engine's global generator already being seeded (the orchestrator calls
-//! `engine.setWorld` before `setWorld` here). Panning is Part 12.3; for now you navigate by
-//! zooming toward the cursor.
+//! `engine.setWorld` before `setWorld` here). Navigation is drag-to-pan (12.3) plus
+//! zoom-toward-the-cursor.
 
 // Zoom stops, coarsest → finest. `scale` is the Cubiomes generation scale (cell = `scale`
 // blocks); `cellPx` is screen pixels per cell. blocks-per-pixel = scale / cellPx.
@@ -124,8 +124,52 @@ export function create2D({ canvas, engine, palette, mcVersion, ui }) {
     dirty = false;
   }
 
+  // --- drag to pan (12.3) ---------------------------------------------------------------
+  // Pointer deltas are converted with `bpp()` read fresh on every move, never captured at
+  // drag start: blocks-per-pixel depends on the active zoom stop, so a captured value would
+  // feel right at one zoom only and would be wrong outright if the wheel fires mid-drag.
+  //
+  // Moves are coalesced to one redraw per animation frame. Unlike the 3D view this renderer
+  // holds no tile cache — every draw regenerates the whole visible grid — so redrawing per
+  // pointermove event would run several full `gen_biomes` calls per frame.
+  let dragging = false, lastX = 0, lastY = 0, raf = 0;
+
+  function scheduleDraw() {
+    if (raf) return;
+    raf = requestAnimationFrame(() => { raf = 0; draw(); });
+  }
+
+  canvas.addEventListener('pointerdown', (e) => {
+    if (!shown || e.button !== 0) return;
+    dragging = true;
+    lastX = e.clientX;
+    lastY = e.clientY;
+    canvas.setPointerCapture(e.pointerId); // keep panning if the cursor leaves the canvas
+    canvas.classList.add('grabbing');
+  });
+
+  function endDrag(e) {
+    if (!dragging) return;
+    dragging = false;
+    if (canvas.hasPointerCapture(e.pointerId)) canvas.releasePointerCapture(e.pointerId);
+    canvas.classList.remove('grabbing');
+  }
+  canvas.addEventListener('pointerup', endDrag);
+  canvas.addEventListener('pointercancel', endDrag);
+
   canvas.addEventListener('pointermove', (e) => {
-    if (!shown || !grid) return;
+    if (!shown) return;
+    if (dragging) {
+      // Drag the map right => look further west, so the centre moves against the pointer.
+      const b = bpp();
+      cx -= (e.clientX - lastX) * b;
+      cz -= (e.clientY - lastY) * b;
+      lastX = e.clientX;
+      lastY = e.clientY;
+      scheduleDraw();
+      return; // skip hover: `grid` still describes the pre-move frame
+    }
+    if (!grid) return;
     const r = canvas.getBoundingClientRect();
     const mx = e.clientX - r.left, my = e.clientY - r.top;
     const ix = Math.floor((mx - grid.screenX) / grid.cellPx);
@@ -162,6 +206,13 @@ export function create2D({ canvas, engine, palette, mcVersion, ui }) {
     show() {
       shown = true;
       if (dirty) draw();
+    },
+    /// Force a redraw. `show()` deliberately only draws when dirty, so it cannot serve a
+    /// resize: the canvas backing store is sized from the client box inside `draw()`, and
+    /// without this the map stays at its old pixel size until some other interaction.
+    redraw() {
+      if (shown) draw();
+      else dirty = true; // hidden: clientWidth is 0, so defer to the next show()
     },
     hide() { shown = false; },
   };

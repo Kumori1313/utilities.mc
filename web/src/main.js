@@ -84,7 +84,7 @@ $('rdist').addEventListener('input', (e) => {
 });
 
 // The 2D canvas has no self-driven loop, so redraw it on window resize when it's active.
-window.addEventListener('resize', () => { if (mapMode === '2d') map2d.show(); });
+window.addEventListener('resize', () => { if (mapMode === '2d') map2d.redraw(); });
 
 // Tab switching. Returning to the map re-shows the active renderer (resize / redraw).
 const views = document.querySelectorAll('.view');
