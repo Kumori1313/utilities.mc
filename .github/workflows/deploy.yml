@@ -76,11 +76,12 @@ jobs:
       - name: Build engine, app and web
         run: ./scripts/build-all.sh
 
-      # enablement turns Pages on for the repo if it is not already, so this needs no manual
-      # setup step in the repo settings.
+      # No `enablement: true` here — the workflow's GITHUB_TOKEN cannot create a Pages site
+      # ("Resource not accessible by integration"; it needs administration:write, which the
+      # default token does not carry). Pages was instead enabled once out of band via
+      # `gh api -X POST repos/OWNER/REPO/pages -f build_type=workflow`. If this ever runs on a
+      # fresh fork, do that once first.
       - uses: actions/configure-pages@v5
-        with:
-          enablement: true
       - uses: actions/upload-pages-artifact@v3
         with:
           path: web/dist
