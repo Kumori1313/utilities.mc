@@ -8,7 +8,7 @@
 use enchant::anvil::{AnvilItem, TOO_EXPENSIVE_LIMIT, combine};
 use enchant::data::index_of;
 use enchant::optimize::optimal_plan;
-use enchant::{ENCHANTMENTS, MC_VERSION, enchantments_in_slot, offered_levels};
+use enchant::{ENCHANTMENTS, MC_VERSION, enchantability, enchantments_in_slot, offered_levels};
 use wasm_bindgen::prelude::*;
 
 /// Version the tables encode, for the UI to display.
@@ -132,6 +132,124 @@ pub fn enchant_applicable(item: &str) -> Vec<String> {
         .filter(|e| is_book || e.supported_items.contains(&item))
         .map(|e| e.name.to_string())
         .collect()
+}
+
+/// Material prefixes; stripping one yields the kind. Ordered so that one list reads correctly
+/// for both families: tools skip leather/chainmail, armour skips wooden/stone, and each still
+/// runs weakest to strongest. (`kind_of` only needs the prefixes, which are disjoint.)
+const MATERIALS: [&str; 8] = [
+    "leather_",
+    "wooden_",
+    "stone_",
+    "chainmail_",
+    "iron_",
+    "golden_",
+    "diamond_",
+    "netherite_",
+];
+
+/// Kinds in a sensible dropdown order; anything unlisted sorts after these, alphabetically.
+const KIND_ORDER: [&str; 22] = [
+    "sword",
+    "axe",
+    "pickaxe",
+    "shovel",
+    "hoe",
+    "helmet",
+    "chestplate",
+    "leggings",
+    "boots",
+    "bow",
+    "crossbow",
+    "trident",
+    "mace",
+    "shield",
+    "elytra",
+    "fishing_rod",
+    "shears",
+    "flint_and_steel",
+    "brush",
+    "carrot_on_a_stick",
+    "warped_fungus_on_a_stick",
+    "book",
+];
+
+/// Kind of an item: `diamond_sword` -> `sword`, `turtle_helmet` -> `helmet`, every mob head
+/// -> `mob_head`. An item with no material variants is its own kind.
+fn kind_of(item: &str) -> &str {
+    if let Some(k) = MATERIALS.iter().find_map(|m| item.strip_prefix(m)) {
+        return k;
+    }
+    if item == "turtle_helmet" {
+        return "helmet";
+    }
+    if item.ends_with("_head") || item.ends_with("_skull") {
+        return "mob_head";
+    }
+    item
+}
+
+fn kind_rank(kind: &str) -> usize {
+    KIND_ORDER.iter().position(|k| *k == kind).unwrap_or(usize::MAX)
+}
+
+fn material_rank(item: &str) -> usize {
+    MATERIALS
+        .iter()
+        .position(|m| item.starts_with(m))
+        .unwrap_or(if item == "turtle_helmet" { 8 } else { 0 })
+}
+
+/// Every enchantable item, ordered by kind then material. Books accept any enchantment but
+/// are not listed in any `supported_items`, so they are added explicitly.
+fn all_items() -> Vec<&'static str> {
+    let mut v: Vec<&'static str> = vec!["book"];
+    for e in &ENCHANTMENTS {
+        for &i in e.supported_items {
+            if !v.contains(&i) {
+                v.push(i);
+            }
+        }
+    }
+    v.sort_by_key(|i| (kind_rank(kind_of(i)), kind_of(i), material_rank(i), *i));
+    v
+}
+
+/// `"kind|item_id"` lines for the enchanting-table dropdown. Every material variant appears:
+/// enchantability is per-item and changes what a slot rolls, so a golden sword and a diamond
+/// one are genuinely different questions. Items a table cannot enchant (mob heads, compasses
+/// — anvil-only curse carriers) are excluded.
+#[wasm_bindgen]
+pub fn enchant_table_items() -> Vec<String> {
+    all_items()
+        .into_iter()
+        .filter(|i| {
+            enchantability(i).is_some()
+                && (*i == "book"
+                    || ENCHANTMENTS
+                        .iter()
+                        .any(|e| e.in_enchanting_table && e.supported_items.contains(i)))
+        })
+        .map(|i| format!("{}|{}", kind_of(i), i))
+        .collect()
+}
+
+/// `"kind|item_id"` lines for the anvil planner: one representative per kind. Material cannot
+/// affect an anvil plan — the applicable enchantment set is identical across every variant of
+/// a kind, and cost depends only on the enchantments and prior work — so listing the variants
+/// would offer several ways to pick the same thing.
+#[wasm_bindgen]
+pub fn anvil_items() -> Vec<String> {
+    let mut seen: Vec<&str> = Vec::new();
+    let mut out = Vec::new();
+    for i in all_items() {
+        let k = kind_of(i);
+        if !seen.contains(&k) {
+            seen.push(k);
+            out.push(format!("{k}|{i}"));
+        }
+    }
+    out
 }
 
 /// Max level of an enchantment (number of tier columns to enable in the grid).

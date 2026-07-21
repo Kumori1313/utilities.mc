@@ -2,8 +2,14 @@
 
 const ROMAN = ['', 'I', 'II', 'III', 'IV', 'V'];
 const roman = (n) => ROMAN[n] ?? String(n);
-// In-game names that don't follow the id's word order.
-const DISPLAY = { vanishing_curse: 'Curse of Vanishing', binding_curse: 'Curse of Binding' };
+// In-game names that don't follow the id's word order or capitalisation.
+const DISPLAY = {
+  vanishing_curse: 'Curse of Vanishing',
+  binding_curse: 'Curse of Binding',
+  flint_and_steel: 'Flint and Steel',
+  carrot_on_a_stick: 'Carrot on a Stick',
+  warped_fungus_on_a_stick: 'Warped Fungus on a Stick',
+};
 const title = (id) =>
   DISPLAY[id] ?? id.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 // "sharpness 5" -> "Sharpness V"; used on the roll table.
@@ -14,14 +20,42 @@ const fmt = (line) => {
 // Romanise every "name level" occurrence within a longer string (the optimizer steps).
 const prettify = (s) => s.replace(/([a-z_]+) (\d+)/g, (_, n, l) => `${title(n)} ${roman(+l)}`);
 
-const ITEMS = [
-  'diamond_sword', 'netherite_sword', 'golden_sword', 'iron_sword',
-  'diamond_pickaxe', 'diamond_axe', 'diamond_shovel', 'diamond_hoe',
-  'diamond_helmet', 'diamond_chestplate', 'diamond_leggings', 'diamond_boots',
-  'bow', 'crossbow', 'trident', 'fishing_rod', 'mace', 'elytra', 'shears', 'book',
-];
+// Item lists arrive as "kind|id". Within a kind the id's distinguishing part is its material
+// ("diamond_sword" in kind "sword" -> "Diamond"); an item that is its own kind reads whole.
+const optLabel = (kind, id) => title(id.endsWith(`_${kind}`) ? id.slice(0, -kind.length - 1) : id);
+
+// Group by kind, using an <optgroup> only where a kind actually has variants to distinguish.
+function itemOptions(lines) {
+  const groups = new Map();
+  for (const line of lines) {
+    const [kind, id] = line.split('|');
+    if (!groups.has(kind)) groups.set(kind, []);
+    groups.get(kind).push([kind, id]);
+  }
+  return [...groups]
+    .map(([kind, items]) => {
+      const opts = items
+        .map(([k, id]) => `<option value="${id}">${optLabel(k, id)}</option>`)
+        .join('');
+      return items.length > 1 ? `<optgroup label="${title(kind)}">${opts}</optgroup>` : opts;
+    })
+    .join('');
+}
 
 export function setupEnchant(root, app) {
+  // Two dropdowns, deliberately different. The table roll depends on the item's
+  // enchantability, so every material variant is a distinct choice. An anvil plan does not —
+  // the applicable set is identical across a kind's variants and cost is material-independent
+  // — so the planner lists each kind once.
+  const tableItems = itemOptions(app.enchant_table_items());
+  const anvilItemOpts = app
+    .anvil_items()
+    .map((line) => {
+      const [kind, id] = line.split('|');
+      return `<option value="${id}">${title(kind)}</option>`;
+    })
+    .join('');
+
   root.innerHTML = `
     <h2>Enchantment calculator</h2>
     <p class="sub">Predicts enchanting-table results for a given xp seed — Minecraft
@@ -32,7 +66,7 @@ export function setupEnchant(root, app) {
       <label>xp seed <input id="e-seed" value="-1234567" spellcheck="false"></label>
       <label>bookshelves <input id="e-shelves" type="number" min="0" max="15" value="15"></label>
       <label>item
-        <select id="e-item">${ITEMS.map((i) => `<option>${i}</option>`).join('')}</select>
+        <select id="e-item">${tableItems}</select>
       </label>
     </div>
 
@@ -44,11 +78,13 @@ export function setupEnchant(root, app) {
     <h3>Anvil planner</h3>
     <p class="sub">Choose an item and the enchantments you want. The cheapest combining order
       and its total level cost are worked out automatically. Conflicting enchantments grey out;
-      tick <em>have</em> on one already on the item so it is not counted as a book to add.</p>
+      tick <em>have</em> on one already on the item so it is not counted as a book to add.
+      Material is not listed because it cannot change an anvil plan — unlike the table above,
+      where enchantability makes a golden sword roll differently from a diamond one.</p>
 
     <div class="grid">
       <label>item
-        <select id="an-item">${ITEMS.map((i) => `<option>${i}</option>`).join('')}</select>
+        <select id="an-item">${anvilItemOpts}</select>
       </label>
       <label>item's prior work <input id="an-pw" type="number" min="0" value="0"></label>
       <label class="chk"><input id="an-bypass" type="checkbox"> bypass conflict restrictions</label>
@@ -163,6 +199,10 @@ export function setupEnchant(root, app) {
   $('#an-item').addEventListener('change', renderGrid);
   $('#an-bypass').addEventListener('change', renderGrid);
   $('#an-pw').addEventListener('input', compute);
+
+  // Diamond is the interesting default; the lists themselves start at wooden.
+  const eItem = $('#e-item');
+  if ([...eItem.options].some((o) => o.value === 'diamond_sword')) eItem.value = 'diamond_sword';
 
   roll();
   renderGrid();
