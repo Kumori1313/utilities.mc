@@ -10,21 +10,32 @@
 //! zooming toward the cursor.
 
 // Zoom stops, coarsest → finest. `scale` is the Cubiomes generation scale (cell = `scale`
-// blocks); `cellPx` is screen pixels per cell. blocks-per-pixel = scale / cellPx. Scale 1
-// (Voronoi, 16x the cells) is gated to the two finest stops so it never covers a large area
-// — the landmine 12.2 calls out.
+// blocks); `cellPx` is screen pixels per cell. blocks-per-pixel = scale / cellPx.
+//
+// The zoom range is carried by `scale`, NOT by shrinking `cellPx` — cell count is
+// canvasArea/cellPx², so a small cellPx when zoomed out is what tanks performance. Keeping
+// cellPx >= 4 bounds the work at every level; scale 256 at cellPx 4 already shows ~90k
+// blocks across a normal window, which is the practical zoom-out cap. Scale 1 (Voronoi,
+// 16x the cells) stays at the two finest stops so it never covers a large area.
 const STOPS = [
-  { scale: 256, cellPx: 2 }, // continents
-  { scale: 64, cellPx: 2 },
+  { scale: 256, cellPx: 4 }, // continents — the zoom-out limit
+  { scale: 256, cellPx: 8 },
   { scale: 64, cellPx: 4 },
-  { scale: 16, cellPx: 3 },
-  { scale: 16, cellPx: 6 },
-  { scale: 4, cellPx: 3 },
-  { scale: 4, cellPx: 6 }, // default — regional
-  { scale: 1, cellPx: 4 }, // block-accurate
-  { scale: 1, cellPx: 8 },
+  { scale: 64, cellPx: 8 },
+  { scale: 16, cellPx: 4 },
+  { scale: 16, cellPx: 8 },
+  { scale: 4, cellPx: 4 }, // default — regional
+  { scale: 4, cellPx: 8 },
+  { scale: 1, cellPx: 6 }, // block-accurate
+  { scale: 1, cellPx: 10 },
 ];
 const DEFAULT_STOP = 6;
+
+// Hard ceiling on cells generated per redraw, independent of zoom — defends against very
+// large (4K/8K) canvases where even cellPx 4 would ask for millions of samples. If the
+// visible grid exceeds this, the cells are drawn coarser (larger effective cellPx) rather
+// than generating an unbounded amount.
+const MAX_CELLS = 400_000;
 
 export function create2D({ canvas, engine, palette, mcVersion, ui }) {
   const ctx = canvas.getContext('2d');
@@ -36,7 +47,17 @@ export function create2D({ canvas, engine, palette, mcVersion, ui }) {
   let shown = false, dirty = true;
   let grid = null; // last drawn grid, for hover lookups
 
-  const bpp = () => STOPS[stop].scale / STOPS[stop].cellPx;
+  // Effective pixels-per-cell at the current stop, after the MAX_CELLS cap. On an oversized
+  // canvas this coarsens (bigger cellPx = fewer cells) so a redraw never asks the engine for
+  // an unbounded number of samples. draw(), bpp(), zoom and hover all read this same value so
+  // their coordinate math stays consistent when the cap is active.
+  function effCellPx(w, h) {
+    let cp = STOPS[stop].cellPx;
+    while ((Math.ceil(w / cp) + 1) * (Math.ceil(h / cp) + 1) > MAX_CELLS) cp *= 2;
+    return cp;
+  }
+
+  const bpp = () => STOPS[stop].scale / effCellPx(canvas.width, canvas.height);
 
   // Screen pixel -> continuous world-block coordinate.
   function screenToWorld(mx, my) {
@@ -50,7 +71,8 @@ export function create2D({ canvas, engine, palette, mcVersion, ui }) {
     canvas.height = h;
     ctx.imageSmoothingEnabled = false;
 
-    const { scale, cellPx } = STOPS[stop];
+    const { scale } = STOPS[stop];
+    const cellPx = effCellPx(w, h);
     const sx = Math.ceil(w / cellPx) + 1;
     const sz = Math.ceil(h / cellPx) + 1;
     const originCellX = Math.floor(cx / scale) - (sx >> 1);

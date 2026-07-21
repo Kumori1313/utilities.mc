@@ -20,7 +20,8 @@ export function create3D({ canvas, engine, View, palette, mcVersion, ui }) {
 
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0x11131a);
-  scene.fog = new THREE.Fog(0x11131a, 900, 2400);
+  // No fog: it faded out the far edge of the rendered plane before the render-distance
+  // boundary, so you couldn't see how far the terrain actually extends.
 
   const camera = new THREE.PerspectiveCamera(55, 1, 1, 6000);
   const controls = new OrbitControls(camera, renderer.domElement);
