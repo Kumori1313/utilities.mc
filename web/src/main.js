@@ -40,6 +40,17 @@ function loadWorld(seedText, x, z) {
   map3d.setWorld(seedText, x, z);
 }
 
+// Render distance (3D). JS holds the source of truth: a range input laid out while
+// display:none can corrupt its own `value` property to its max, so we never read the
+// slider to seed state — we write this value into it once it is visible.
+let renderRadius = 3;
+function syncRdist() {
+  const rdist = $('rdist');
+  rdist.max = String(map3d.maxRadius);
+  rdist.value = String(renderRadius);
+  $('rdist-val').textContent = renderRadius;
+}
+
 let mapMode = '2d';
 function setMode(mode) {
   mapMode = mode;
@@ -51,7 +62,11 @@ function setMode(mode) {
   document.querySelectorAll('#map-mode button').forEach((b) =>
     b.classList.toggle('active', b.dataset.mode === mode));
   if (mode === '2d') { map3d.hide(); map2d.show(); }
-  else { map2d.hide(); map3d.show(); }
+  else {
+    map2d.hide();
+    map3d.show();
+    syncRdist(); // write the known radius into the now-visible slider
+  }
 }
 
 // --- controls ---------------------------------------------------------------
@@ -60,9 +75,13 @@ $('go').addEventListener('click', () => loadWorld($('seed').value, +$('cx').valu
 document.querySelectorAll('#map-mode button').forEach((b) =>
   b.addEventListener('click', () => setMode(b.dataset.mode)));
 
-const rdist = $('rdist');
-rdist.max = String(map3d.maxRadius);
-rdist.addEventListener('input', () => { $('rdist-val').textContent = rdist.value; map3d.setRadius(+rdist.value); });
+// Dragging the slider is the one time the input is the source of truth (it is visible and
+// user-driven); mirror it into renderRadius and apply it.
+$('rdist').addEventListener('input', (e) => {
+  renderRadius = +e.target.value;
+  $('rdist-val').textContent = renderRadius;
+  map3d.setRadius(renderRadius);
+});
 
 // The 2D canvas has no self-driven loop, so redraw it on window resize when it's active.
 window.addEventListener('resize', () => { if (mapMode === '2d') map2d.show(); });
