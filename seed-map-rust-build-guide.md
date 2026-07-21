@@ -1193,7 +1193,8 @@ type's viability rule is, not how many regions it covers.
       `gen_structures` rejects a type whose `sc.dim` does not match the loaded generator, and
       the map loads the Overworld unconditionally. These six are therefore blocked on a
       dimension switch — which also means Nether/End biome rendering — not on structure work.
-      Six of the 23 are a *different feature*; do not scope them into this one.
+      Six of the 23 are a *different feature*; do not scope them into this one. That feature is
+      **Part 14**, and 14.3 picks these up.
 - [ ] **Each type is a separate verification claim, and that is the actual per-type cost.**
       `structure_id` is deliberately narrow: adding a name to it asserts that type was checked
       against Chunkbase for the pinned version. Widen it one type at a time, verifying each,
@@ -1242,3 +1243,98 @@ Small fixes to the 2D map, done alongside 12.4.
       biome beneath it and carries a halo in the opposite tone, so it survives mid-tones too.
       The luma is read from the cached tile, not a `getImageData` readback, which would stall
       the pipeline every frame to sample a single pixel.
+
+# Part 14 — Nether and End Support
+
+Let the seed map render the other two dimensions, and unlock the structures that live in them.
+Cross-cutting like Part 13: it touches the engine surface, both renderers, the structure
+layer, and the portal calculator.
+
+## 14.0 — What already works, and the one thing that cannot
+
+Measure before planning here, because the split is not where it looks.
+
+- [x] **`set_world` already takes a dimension** and validates `DIM_NETHER`/`DIM_OVERWORLD`/
+      `DIM_END`. The Rust tile cache already carries `dimension` in its `World` key, so a
+      dimension change already invalidates cached tiles. Nothing in the storage layer needs
+      changing.
+- [x] **`gen_biomes` works in all three dimensions at all five scales.** Verified at seed 1 /
+      1.21.3: the Nether returns nether_wastes, soul_sand_valley, crimson_forest and
+      basalt_deltas; the End returns the_end, small_end_islands, end_highlands and
+      end_midlands. **The 2D map is therefore already capable** — it simply never asks for a
+      non-Overworld dimension.
+- [x] **Landmine — `gen_heights` returns -1 for the Nether and the End, and that is not a
+      limit the shim can lift.** Cubiomes' `mapApproxHeight` has no model for those dimensions
+      and returns a sentinel rather than filling the buffer. **The 3D view is therefore
+      Overworld-only**, permanently, unless a different height source is introduced. Plan the
+      feature as "2D gains two dimensions", not "the map gains two dimensions", or 14.4 will
+      come as an unpleasant surprise late.
+- [x] **Nether and End biomes do not vary with y**, unlike the post-1.18 Overworld. Measured
+      across 289 columns over a 1,600-block box at seed 42: 0 varied in either dimension,
+      while the same probe found 57 of 289 varying in the Overworld
+      (flower_forest/dripstone_caves — the cave-biome effect Part 7 was bitten by). The control
+      matters: without it, "0 varied" is equally consistent with a broken probe. This means the
+      2D map's `yArg` — 63 at scale 1, else 15, chosen for Overworld sea level — is simply
+      irrelevant in the other two dimensions, and needs no per-dimension tuning.
+
+## 14.1 — Dimension selector and world plumbing
+
+- [ ] Add a dimension control alongside the seed/coordinate inputs, and route it into
+      `loadWorld`, which currently passes a hardcoded `0`.
+- [ ] **Landmine — the same two-`set_world` trap as 13.2.** The engine shim holds the C
+      generator; the Rust `View` holds the tile cache; the 2D renderer holds its own JS tile
+      cache and its structure cache. Every one of them must be told. Missing any leaves tiles
+      generated in the previous dimension on screen, which looks like correct output.
+- [ ] Reset the view centre on a dimension change, or at least reconsider it: Overworld
+      coordinates carried into the Nether land 8x further out in effective terms (14.2), and
+      keeping them silently is disorienting rather than helpful.
+
+## 14.2 — Rendering the other dimensions
+
+- [ ] **Landmine — the Nether's 1:8 coordinate ratio makes the same zoom mean different
+      things.** A Nether view 1,920 blocks wide covers ground equivalent to 15,360 Overworld
+      blocks. Decide deliberately whether the zoom range, the default zoom, and the
+      blocks-across readout are per-dimension, and consider showing the Overworld-equivalent
+      coordinate — which is exactly what Part 11's converter already computes. A Nether map
+      that cannot tell you the Overworld coordinate of what you are looking at is missing the
+      point of a Nether map.
+- [ ] **The End reads as empty near the origin, and that is correct.** Within ~1,000 blocks it
+      is uniformly `the_end`; the interesting biomes start further out. A user who loads the
+      End at 0,0 sees one flat colour and reasonably concludes the feature is broken. Say so in
+      the UI rather than letting them guess.
+- [ ] Check palette contrast per dimension before shipping. Cubiomes' own palette covers Nether
+      and End biomes, so nothing needs inventing, but the Nether set is largely reds and browns
+      and may read as one mass at a glance. Verify it is legible; if not, that is a per-dimension
+      palette tweak, not a generation problem.
+
+## 14.3 — Structures in the other dimensions
+
+- [ ] Six types unlock, and only with this part: `Fortress`, `Bastion` and `Ruined_Portal_N`
+      (Nether); `End_City`, `End_Gateway` and `End_Island` (End). This is why 12.6 explicitly
+      scopes them out.
+- [ ] **`gen_structures` already refuses a type whose `sc.dim` does not match the loaded
+      generator** — a deliberate guard, not a bug to work around. The UI must filter the offered
+      type list by the active dimension, or the user checks a box and correctly gets nothing,
+      with no explanation.
+- [ ] **Strongholds are Overworld-only** and `gen_strongholds` guards on it. Do not let the
+      stronghold toggle survive a switch to another dimension.
+- [ ] Each new type needs the same Chunkbase verification as the first four (12.4), against the
+      right dimension's map. Nether fortresses in particular changed placement in 1.16; a check
+      on the pinned version proves nothing about older ones once Part 13 lands.
+
+## 14.4 — The 3D view stays Overworld
+
+- [ ] Disable, or clearly mark, the 3D toggle when a non-Overworld dimension is selected.
+      Silently rendering flat or empty terrain is worse than refusing.
+- [ ] Only revisit this if a real height source appears. Approximating Nether terrain from
+      biome data alone would produce confident, wrong topography — the same class of error as
+      the y=0 cave-biome bug, and harder to notice because nobody has an intuition for what a
+      Nether height map should look like.
+
+## 14.5 — Verification
+
+- [ ] Chunkbase renders the Nether and the End; check each dimension's biomes exactly as Part 8
+      checked the Overworld, on the pinned version, at positive and negative coordinates.
+- [ ] **Treat each dimension as independently unverified.** They share `gen_biomes` but not the
+      generation logic behind it, so an Overworld check says nothing about the Nether. The same
+      applies per structure type per dimension.
