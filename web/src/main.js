@@ -54,12 +54,14 @@ function loadWorld(seedText, x, z) {
   }
   map2d.setWorld(seedText, x, z, dim);
   map3d.setWorld(seedText, x, z, dim);
+  syncLayers(); // spawn is resolved per world, and the layers are Overworld-only
 }
 
 $('dim').addEventListener('change', () => {
   dim = +$('dim').value | 0;
   // Structure types are per-dimension, so the list has to be rebuilt before reloading.
   renderStructureList();
+  syncLayers();
   if (dim !== 0 && mapMode === '3d') setMode('2d'); // 3D has no terrain outside the Overworld
   syncModeAvailability();
   submit();
@@ -100,6 +102,27 @@ function syncStructures() {
     : '';
 }
 $('struct-list').addEventListener('change', syncStructures);
+
+// Non-structure overlays. Both are Overworld-only: slimes spawn there, and world spawn is an
+// Overworld concept the engine refuses to answer elsewhere.
+function syncLayers() {
+  const slimeChunks = $('lay-slime').checked && dim === 0;
+  const worldSpawn = $('lay-spawn').checked && dim === 0;
+  map2d.setLayers({ slimeChunks, worldSpawn });
+  const notes = [];
+  if (dim !== 0 && ($('lay-slime').checked || $('lay-spawn').checked)) {
+    notes.push('Overworld only');
+  } else {
+    // Stated unconditionally rather than only while hidden: nothing notifies this code when
+    // the zoom changes, so a "zoom in to see them" that appears and disappears would go stale
+    // the moment the user scrolled.
+    if (slimeChunks) notes.push('slime chunks show when zoomed in');
+    const sp = map2d.spawnPos();
+    if (worldSpawn && sp) notes.push(`spawn at ${sp.x}, ${sp.z}`);
+  }
+  $('layer-hint').textContent = notes.join(' · ');
+}
+$('layer-list').addEventListener('change', syncLayers);
 
 // Nearest-structure locator. Run on demand rather than continuously: the search is anchored
 // to the centre at the moment it runs, so recomputing while panning would re-target the lines

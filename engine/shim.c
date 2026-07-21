@@ -307,6 +307,42 @@ int gen_structures(int stype, int x0, int z0, int x1, int z1, int *out, int max_
     return n;
 }
 
+// Slime chunks over a rectangle of CHUNK coordinates; `out` receives w*h bytes, 1 or 0.
+//
+// Bulk like gen_biomes rather than a per-chunk export, because the caller wants a whole
+// screenful at once — a zoomed-in view is tens of thousands of chunks, and that many
+// individual calls is the pattern this shim exists to avoid.
+//
+// Slime chunks depend only on the world seed's low 48 bits: not on the version, not on the
+// dimension, and not on biomes. They are still Overworld-only in practice (slimes spawn
+// there), which is the caller's business, not this function's.
+EMSCRIPTEN_KEEPALIVE
+int gen_slime_chunks(int cx, int cz, int w, int h, unsigned char *out) {
+    if (!g_ready || !out) return -1;
+    if (w <= 0 || h <= 0) return -1;
+
+    for (int j = 0; j < h; j++) {
+        for (int i = 0; i < w; i++) {
+            out[j * w + i] = (unsigned char)(isSlimeChunk(g.seed, cx + i, cz + j) != 0);
+        }
+    }
+    return 0;
+}
+
+// World spawn, as a block (x,z) pair written to `out`. Returns 0, or -1 if unavailable.
+//
+// getSpawn runs a real search rather than a lookup, so callers should ask once per world and
+// keep the answer — see the note on its cost where it is called.
+EMSCRIPTEN_KEEPALIVE
+int world_spawn(int *out) {
+    if (!g_ready || !out) return -1;
+    if (g.dim != DIM_OVERWORLD) return -1; // spawn is an Overworld concept
+    Pos p = getSpawn(&g);
+    out[0] = p.x;
+    out[1] = p.z;
+    return 0;
+}
+
 // Stronghold positions as (x,z) pairs, nearest-first from the origin.
 //
 // Strongholds are NOT placed one-per-region: they sit in rings (3 in the first, then 6, 10,

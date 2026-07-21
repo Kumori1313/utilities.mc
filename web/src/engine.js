@@ -52,6 +52,10 @@ export async function boot() {
     genStructures: Module.cwrap('gen_structures', 'number',
                                 ['number', 'number', 'number', 'number', 'number', 'number', 'number']),
     genStrongholds: Module.cwrap('gen_strongholds', 'number', ['number', 'number']),
+    // Bulk, in CHUNK coordinates: a zoomed-in screen is tens of thousands of chunks.
+    genSlimeChunks: Module.cwrap('gen_slime_chunks', 'number',
+                                 ['number', 'number', 'number', 'number', 'number']),
+    worldSpawn: Module.cwrap('world_spawn', 'number', ['number']),
     M: Module,
   };
 

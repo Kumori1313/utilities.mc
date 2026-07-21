@@ -71,6 +71,16 @@ const FRAME_BUDGET_MS = 8;
 // (a biome viability check per region, not per cell) and must not starve tile generation.
 const STRUCT_BUDGET_MS = 4;
 
+/// Widest zoom that still draws slime chunks, as blocks-per-pixel. The limit is legibility,
+/// not cost — filling 518,400 chunks measures at under 1 ms, so the whole overlay is
+/// effectively free. But a chunk is 16 blocks, so at bpp 4 it is already down to 4 screen
+/// pixels, and any further out the 10%-of-chunks pattern washes into flat noise that says
+/// nothing.
+const SLIME_MAX_BPP = 4;
+
+/// Chunk edge in blocks. Slime chunks are a chunk-grid property, not a biome one.
+const CHUNK = 16;
+
 export function create2D({ canvas, engine, palette, mcVersion, ui, structures }) {
   const ctx = canvas.getContext('2d');
   const markerColor = new Map(STRUCTURE_TYPES.map((t) => [t.id, t.color]));
@@ -79,6 +89,10 @@ export function create2D({ canvas, engine, palette, mcVersion, ui, structures })
   let markers = []; // last drawn markers, with screen positions, for hover
   let nearest = null; // { origin: {x, z}, type, targets: [{x, z, dist}] }
   let dim = 0; // Cubiomes DIM_* — only affects presentation here; generation is set globally
+  let showSlime = false, showSpawn = false;
+  let spawn = null; // world spawn, resolved once per world (getSpawn runs a real search)
+  const slime = document.createElement('canvas'); // chunk-resolution scratch, scaled up crisp
+  const slimeCtx = slime.getContext('2d');
 
   let bpp = DEFAULT_BPP; // blocks per screen pixel — the single source of truth for zoom
   let cx = 0, cz = 0; // world-block coordinate at the canvas centre
@@ -191,6 +205,51 @@ export function create2D({ canvas, engine, palette, mcVersion, ui, structures })
     const id = tile.ids[(cellZ - tz * TILE_CELLS) * TILE_CELLS + (cellX - tx * TILE_CELLS)];
     const p = id >= 0 && id < 256 ? id * 3 : 0;
     return (0.299 * palette[p] + 0.587 * palette[p + 1] + 0.114 * palette[p + 2]) / 255;
+  }
+
+  /// Tint slime chunks. Built as a chunk-resolution image and scaled up, the same trick the
+  /// biome tiles use — one drawImage instead of a fillRect per chunk, which at a zoomed-in
+  /// screenful would be tens of thousands of calls.
+  function drawSlime(w, h) {
+    if (!showSlime || bpp > SLIME_MAX_BPP) return;
+    const c0x = Math.floor((cx - (w / 2) * bpp) / CHUNK);
+    const c1x = Math.floor((cx + (w / 2) * bpp) / CHUNK);
+    const c0z = Math.floor((cz - (h / 2) * bpp) / CHUNK);
+    const c1z = Math.floor((cz + (h / 2) * bpp) / CHUNK);
+    const sw = c1x - c0x + 1, sh = c1z - c0z + 1;
+    if (sw <= 0 || sh <= 0) return;
+
+    const ptr = engine.M._malloc(sw * sh);
+    if (engine.genSlimeChunks(c0x, c0z, sw, sh, ptr) !== 0) { engine.M._free(ptr); return; }
+    const img = slimeCtx.createImageData(sw, sh);
+    const d = img.data;
+    const flags = engine.M.HEAPU8.subarray(ptr, ptr + sw * sh);
+    for (let i = 0; i < sw * sh; i++) {
+      if (!flags[i]) continue;
+      const o = i * 4;
+      d[o] = 0x7c; d[o + 1] = 0xd9; d[o + 2] = 0x4a; d[o + 3] = 90; // translucent slime green
+    }
+    engine.M._free(ptr);
+    slime.width = sw; slime.height = sh;
+    slimeCtx.putImageData(img, 0, 0);
+
+    // Aligned to the chunk grid, not the view centre, or the tint would drift off the chunks.
+    const px = w / 2 + (c0x * CHUNK - cx) / bpp;
+    const py = h / 2 + (c0z * CHUNK - cz) / bpp;
+    ctx.drawImage(slime, 0, 0, sw, sh, px, py, (sw * CHUNK) / bpp, (sh * CHUNK) / bpp);
+  }
+
+  /// World spawn marker: a ringed dot, distinct from the structure markers.
+  function drawSpawn(w, h) {
+    if (!showSpawn || !spawn) return;
+    const px = w / 2 + (spawn.x - cx) / bpp;
+    const py = h / 2 + (spawn.z - cz) / bpp;
+    ctx.lineWidth = 3; ctx.strokeStyle = '#000000aa';
+    ctx.beginPath(); ctx.arc(px, py, 7, 0, Math.PI * 2); ctx.stroke();
+    ctx.lineWidth = 2; ctx.strokeStyle = '#ffffff';
+    ctx.beginPath(); ctx.arc(px, py, 7, 0, Math.PI * 2); ctx.stroke();
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath(); ctx.arc(px, py, 2.5, 0, Math.PI * 2); ctx.fill();
   }
 
   /// Overlay structure markers for the enabled types. Scanning shares the frame budget with
@@ -331,8 +390,10 @@ export function create2D({ canvas, engine, palette, mcVersion, ui, structures })
       if (generated < missing.length) scheduleDraw(); // keep filling next frame
     }
 
+    drawSlime(w, h); // under the markers: it is a background property of the chunk grid
     drawMarkers(w, h);
     drawNearest(w, h);
+    drawSpawn(w, h);
 
     // Centre crosshair, so the coordinate readout has a visible anchor. Its colour adapts to
     // the biome underneath — a white cross disappears on snow and ice, a dark one on deep
@@ -462,9 +523,32 @@ export function create2D({ canvas, engine, palette, mcVersion, ui, structures })
       structures.setWorld(); // same rule: a structure list from the old world looks correct
       nearest = null; // targets from the previous world would draw just as convincingly
       dim = newDim;
+      // Resolve spawn once per world: getSpawn runs a search (2-7 ms), not a lookup, so it
+      // must not be called per frame. Overworld only — the engine refuses otherwise.
+      spawn = null;
+      if (dim === 0) {
+        const p = engine.M._malloc(8);
+        if (engine.worldSpawn(p) === 0) {
+          spawn = { x: engine.M.HEAP32[p >> 2], z: engine.M.HEAP32[(p >> 2) + 1] };
+        }
+        engine.M._free(p);
+      }
       cx = x; cz = z;
       dirty = true;
       if (shown) draw();
+    },
+    /// Toggle the non-structure overlays. Returns nothing; re-renders if visible.
+    setLayers({ slimeChunks, worldSpawn }) {
+      showSlime = !!slimeChunks;
+      showSpawn = !!worldSpawn;
+      if (shown) draw();
+    },
+    /// Whether slime chunks are legible at the current zoom, for the UI to explain itself.
+    slimeVisible() {
+      return bpp <= SLIME_MAX_BPP;
+    },
+    spawnPos() {
+      return spawn;
     },
     /// Which structure types to overlay. Re-renders immediately.
     setStructureTypes(set) {

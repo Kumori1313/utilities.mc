@@ -64,6 +64,9 @@ const eng = {
   genStructures: M.cwrap('gen_structures', 'number',
     ['number', 'number', 'number', 'number', 'number', 'number', 'number']),
   genStrongholds: M.cwrap('gen_strongholds', 'number', ['number', 'number']),
+  genSlimeChunks: M.cwrap('gen_slime_chunks', 'number',
+    ['number', 'number', 'number', 'number', 'number']),
+  worldSpawn: M.cwrap('world_spawn', 'number', ['number']),
   M,
 };
 
@@ -172,6 +175,30 @@ check('ground', 'nearest end gateways',
 
 // Leave the generator back in the Overworld for anything that follows.
 eng.setWorld(BigInt.asUintN(64, 1n), mc, 0);
+
+// --- non-structure layers ---
+console.log('\nlayers');
+eng.setWorld(BigInt.asUintN(64, 1n), mc, 0);
+const spPtr = M._malloc(8);
+check('ground', 'world_spawn succeeds in the Overworld', eng.worldSpawn(spPtr), 0);
+check('regression', 'seed 1 world spawn',
+  [M.HEAP32[spPtr >> 2], M.HEAP32[(spPtr >> 2) + 1]], [160, 160]);
+eng.setWorld(BigInt.asUintN(64, 1n), mc, -1);
+check('ground', 'world_spawn refuses the Nether', eng.worldSpawn(spPtr), -1);
+M._free(spPtr);
+
+eng.setWorld(BigInt.asUintN(64, 1n), mc, 0);
+const N = 400;
+const slPtr = M._malloc(N * N);
+check('ground', 'gen_slime_chunks succeeds', eng.genSlimeChunks(-N / 2, -N / 2, N, N, slPtr), 0);
+let slime = 0;
+for (let i = 0; i < N * N; i++) slime += M.HEAPU8[slPtr + i];
+const rate = slime / (N * N);
+// Minecraft makes ~1 chunk in 10 a slime chunk. This is a distribution check, not a captured
+// number: it would catch a wrong seed, a broken RNG, or an all-zero buffer, none of which the
+// return code reveals.
+check('ground', 'slime chunk rate is near 10%', rate > 0.08 && rate < 0.12, true);
+M._free(slPtr);
 
 console.log('\ncalculators');
 check('regression', 'enchant table version', app.enchant_version(), MC);
