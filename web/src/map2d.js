@@ -37,15 +37,100 @@ const ZOOM_K = Math.log(2 ** (1 / 4)) / 100;
 // it drops to a coarser generation scale rather than generating an unbounded amount.
 const MAX_CELLS = 400_000;
 
+// --- tiling -----------------------------------------------------------------------------
+//
+// The renderer used to regenerate the entire visible grid on every redraw. That is what made
+// panning and zooming feel heavy: measured against this engine, a full-screen 481x271 grid
+// costs ~277 ms at scale 4 (and ~500 ms at scale 256), so every drag frame was paying for a
+// whole screen of biome generation.
+//
+// Generation is now split into fixed world-aligned tiles that are cached once and re-blitted
+// thereafter, so a pan only generates the tiles it newly exposes. It is caching that wins
+// here, not batching: measured cost is ~2.1 us/cell and flat across batch sizes from 256 to
+// 65,536 cells, so one big call is no cheaper per cell than many small ones.
+//
+// 32 cells/tile is chosen for latency, not throughput — since per-cell cost is flat, the only
+// thing tile size controls is the size of a single hitch. A 32x32 tile is ~2 ms; a 64x64 one
+// would be ~8.6 ms, past a frame budget on its own.
+const TILE_CELLS = 32;
+
+// Tiles kept before least-recently-used eviction. 1024 tiles is ~4 MB of ids plus their small
+// canvases, and comfortably exceeds a 4K screenful at any zoom so panning back and forth
+// inside a region never thrashes.
+const MAX_TILES = 1024;
+
+// Per-frame generation budget. Missing tiles beyond this are left for the next frame, so a
+// cold view fills in progressively instead of blocking on a few hundred milliseconds of work.
+const FRAME_BUDGET_MS = 8;
+
 export function create2D({ canvas, engine, palette, mcVersion, ui }) {
   const ctx = canvas.getContext('2d');
-  const off = document.createElement('canvas'); // cell-resolution scratch, scaled up crisp
-  const offCtx = off.getContext('2d');
 
   let bpp = DEFAULT_BPP; // blocks per screen pixel — the single source of truth for zoom
   let cx = 0, cz = 0; // world-block coordinate at the canvas centre
   let shown = false, dirty = true;
-  let grid = null; // last drawn grid, for hover lookups
+  let lastScale = SCALES[1]; // scale of the last draw, for hover lookups
+
+  // Tile cache, keyed "scale:tx:tz". A Map iterates in insertion order, which is all an LRU
+  // needs: re-inserting on hit moves an entry to the end, so the oldest key is always first.
+  // Scale is in the key because the same tile index at another scale covers different ground
+  // entirely — omitting it would serve 4x-offset data, the same trap the Rust cache calls out.
+  const tiles = new Map();
+
+  function tileKey(scale, tx, tz) {
+    return `${scale}:${tx}:${tz}`;
+  }
+
+  function getTile(scale, tx, tz) {
+    const key = tileKey(scale, tx, tz);
+    const hit = tiles.get(key);
+    if (hit === undefined) return null;
+    tiles.delete(key); // re-insert to mark most-recently-used
+    tiles.set(key, hit);
+    return hit;
+  }
+
+  /// Generate one tile: its biome ids plus a cell-resolution canvas to blit. Returns null if
+  /// the engine call fails, so a failure degrades to a blank tile rather than poisoning the
+  /// cache with garbage.
+  function makeTile(scale, tx, tz) {
+    const n = TILE_CELLS * TILE_CELLS;
+    // A near-sea-level layer, so the overview shows surface biomes (ocean, plains, forest)
+    // and not the deep cave biomes that appear near y=0. Cubiomes' vertical scaling is 1:1
+    // at scale 1 and 1:4 otherwise, so the y argument differs by scale.
+    const yArg = scale === 1 ? 63 : 15;
+    const ptr = engine.M._malloc(n * 4);
+    const rc = engine.genBiomes(
+      scale, tx * TILE_CELLS, yArg, tz * TILE_CELLS, TILE_CELLS, 1, TILE_CELLS, ptr,
+    );
+    if (rc !== 0) {
+      engine.M._free(ptr);
+      ui.setStatus(`gen_biomes failed (scale ${scale})`, 'err');
+      return null;
+    }
+    // Copy out before any later allocation can detach the heap view.
+    const ids = Int32Array.from(engine.M.HEAP32.subarray(ptr >> 2, (ptr >> 2) + n));
+    engine.M._free(ptr);
+
+    const c = document.createElement('canvas');
+    c.width = TILE_CELLS;
+    c.height = TILE_CELLS;
+    const cctx = c.getContext('2d');
+    const img = cctx.createImageData(TILE_CELLS, TILE_CELLS);
+    const d = img.data;
+    for (let i = 0; i < n; i++) {
+      const id = ids[i];
+      const p = id >= 0 && id < 256 ? id * 3 : 0;
+      const o = i * 4;
+      d[o] = palette[p]; d[o + 1] = palette[p + 1]; d[o + 2] = palette[p + 2]; d[o + 3] = 255;
+    }
+    cctx.putImageData(img, 0, 0);
+
+    const tile = { ids, canvas: c };
+    tiles.set(tileKey(scale, tx, tz), tile);
+    if (tiles.size > MAX_TILES) tiles.delete(tiles.keys().next().value);
+    return tile;
+  }
 
   // Finest generation scale whose cells still cover MIN_CELL_PX screen pixels and whose grid
   // fits the cell budget. Note this coarsens the *scale* rather than adjusting `bpp`, so the
@@ -65,6 +150,22 @@ export function create2D({ canvas, engine, palette, mcVersion, ui }) {
     return { x: cx + (mx - canvas.width / 2) * bpp, z: cz + (my - canvas.height / 2) * bpp };
   }
 
+  /// Blit one tile, snapped to whole pixels so neighbours abut exactly.
+  ///
+  /// Both edges are derived from the *tile index* through one shared expression, rather than
+  /// rounding an origin and adding a fractional width. Tile n's right edge and tile n+1's left
+  /// edge are then the identical computation on the identical input, so they cannot disagree.
+  /// Rounding `px + width` instead is equal in exact arithmetic but not bit-identical to the
+  /// neighbour's `round(px_next)`, and an edge landing on .5 then splits into a 1px seam.
+  function drawTile(tile, tx, tz, scale, w, h) {
+    const tileBlocks = TILE_CELLS * scale;
+    const edgeX = (i) => Math.round(w / 2 + (i * tileBlocks - cx) / bpp);
+    const edgeZ = (i) => Math.round(h / 2 + (i * tileBlocks - cz) / bpp);
+    const x0 = edgeX(tx), x1 = edgeX(tx + 1);
+    const y0 = edgeZ(tz), y1 = edgeZ(tz + 1);
+    ctx.drawImage(tile.canvas, 0, 0, TILE_CELLS, TILE_CELLS, x0, y0, x1 - x0, y1 - y0);
+  }
+
   function draw() {
     const w = canvas.clientWidth, h = canvas.clientHeight;
     if (w === 0 || h === 0) return; // hidden
@@ -73,44 +174,41 @@ export function create2D({ canvas, engine, palette, mcVersion, ui }) {
     ctx.imageSmoothingEnabled = false;
 
     const scale = scaleFor(w, h);
-    const cellPx = scale / bpp; // fractional; drawImage scales the cell image to suit
-    const sx = Math.ceil(w / cellPx) + 1;
-    const sz = Math.ceil(h / cellPx) + 1;
-    const originCellX = Math.floor(cx / scale) - (sx >> 1);
-    const originCellZ = Math.floor(cz / scale) - (sz >> 1);
-    // A near-sea-level layer, so the overview shows surface biomes (ocean, plains, forest)
-    // and not the deep cave biomes that appear near y=0. Cubiomes' vertical scaling is 1:1
-    // at scale 1 and 1:4 otherwise, so the y argument differs by scale.
-    const yArg = scale === 1 ? 63 : 15;
+    lastScale = scale;
+    const cellPx = scale / bpp; // fractional; drawImage scales the tile image to suit
+    const tileBlocks = TILE_CELLS * scale;
 
-    const n = sx * sz;
-    const ptr = engine.M._malloc(n * 4);
-    const rc = engine.genBiomes(scale, originCellX, yArg, originCellZ, sx, 1, sz, ptr);
-    if (rc !== 0) {
-      engine.M._free(ptr);
-      ui.setStatus(`gen_biomes failed (scale ${scale})`, 'err');
-      return;
-    }
-    // Copy out before any later allocation can detach the heap view.
-    const ids = Int32Array.from(engine.M.HEAP32.subarray(ptr >> 2, (ptr >> 2) + n));
-    engine.M._free(ptr);
+    // Tile range covering the viewport. Screen x of a tile's left edge is
+    // w/2 + (tileBlockX - cx) / bpp, so invert that at the two screen edges.
+    const t0x = Math.floor((cx - (w / 2) * bpp) / tileBlocks);
+    const t1x = Math.floor((cx + (w / 2) * bpp) / tileBlocks);
+    const t0z = Math.floor((cz - (h / 2) * bpp) / tileBlocks);
+    const t1z = Math.floor((cz + (h / 2) * bpp) / tileBlocks);
 
-    const img = offCtx.createImageData(sx, sz);
-    const d = img.data;
-    for (let i = 0; i < n; i++) {
-      const id = ids[i];
-      const p = id >= 0 && id < 256 ? id * 3 : 0;
-      const o = i * 4;
-      d[o] = palette[p]; d[o + 1] = palette[p + 1]; d[o + 2] = palette[p + 2]; d[o + 3] = 255;
-    }
-    off.width = sx; off.height = sz;
-    offCtx.putImageData(img, 0, 0);
-
-    // Align so world (cx, cz) lands at the canvas centre.
-    const screenX = w / 2 - (cx - originCellX * scale) / bpp;
-    const screenZ = h / 2 - (cz - originCellZ * scale) / bpp;
     ctx.clearRect(0, 0, w, h);
-    ctx.drawImage(off, 0, 0, sx, sz, screenX, screenZ, sx * cellPx, sz * cellPx);
+    const missing = [];
+    for (let tz = t0z; tz <= t1z; tz++) {
+      for (let tx = t0x; tx <= t1x; tx++) {
+        const tile = getTile(scale, tx, tz);
+        if (tile) drawTile(tile, tx, tz, scale, w, h);
+        // Queue by distance from the view centre so the middle of the screen fills first.
+        else missing.push({ tx, tz, d: Math.abs(tx - (t0x + t1x) / 2) + Math.abs(tz - (t0z + t1z) / 2) });
+      }
+    }
+
+    // Fill what the frame budget allows; anything left over comes in on later frames.
+    let generated = 0;
+    if (missing.length) {
+      missing.sort((a, b) => a.d - b.d);
+      const started = performance.now();
+      for (const m of missing) {
+        if (performance.now() - started > FRAME_BUDGET_MS) break;
+        const tile = makeTile(scale, m.tx, m.tz);
+        generated++;
+        if (tile) drawTile(tile, m.tx, m.tz, scale, w, h);
+      }
+      if (generated < missing.length) scheduleDraw(); // keep filling next frame
+    }
 
     // Centre crosshair, so the coordinate readout has a visible anchor.
     ctx.strokeStyle = '#ffffff88';
@@ -120,10 +218,11 @@ export function create2D({ canvas, engine, palette, mcVersion, ui }) {
     ctx.moveTo(w / 2, h / 2 - 6); ctx.lineTo(w / 2, h / 2 + 6);
     ctx.stroke();
 
-    grid = { scale, cellPx, originCellX, originCellZ, sx, sz, ids, screenX, screenZ };
+    const pending = missing.length - generated;
     ui.setStatus(
       `2D · scale ${scale} · ${Math.round(w * bpp)} blocks across · ` +
-        `centre ${Math.round(cx)}, ${Math.round(cz)}`,
+        `centre ${Math.round(cx)}, ${Math.round(cz)}` +
+        (pending > 0 ? ` · loading ${pending}` : ''),
       'ok',
     );
     dirty = false;
@@ -134,9 +233,9 @@ export function create2D({ canvas, engine, palette, mcVersion, ui }) {
   // start: a captured value would feel right at one zoom only, and would be wrong outright if
   // the wheel fires mid-drag.
   //
-  // Moves are coalesced to one redraw per animation frame. Unlike the 3D view this renderer
-  // holds no tile cache — every draw regenerates the whole visible grid — so redrawing per
-  // pointermove event would run several full `gen_biomes` calls per frame.
+  // Moves are coalesced to one redraw per animation frame: pointermove can fire several times
+  // per frame, and each redraw re-blits every visible tile (and may generate newly exposed
+  // ones), so drawing per event would repeat that work with nothing to show for it.
   let dragging = false, lastX = 0, lastY = 0, raf = 0;
 
   function scheduleDraw() {
@@ -171,19 +270,19 @@ export function create2D({ canvas, engine, palette, mcVersion, ui }) {
       lastX = e.clientX;
       lastY = e.clientY;
       scheduleDraw();
-      return; // skip hover: `grid` still describes the pre-move frame
+      return; // skip hover: the readout would lag a frame behind the pan anyway
     }
-    if (!grid) return;
     const r = canvas.getBoundingClientRect();
-    const mx = e.clientX - r.left, my = e.clientY - r.top;
-    const ix = Math.floor((mx - grid.screenX) / grid.cellPx);
-    const iz = Math.floor((my - grid.screenZ) / grid.cellPx);
-    if (ix < 0 || iz < 0 || ix >= grid.sx || iz >= grid.sz) { ui.hoverEl.textContent = '—'; return; }
-    const id = grid.ids[iz * grid.sx + ix];
-    const bx = (grid.originCellX + ix) * grid.scale;
-    const bz = (grid.originCellZ + iz) * grid.scale;
+    const { x: wx, z: wz } = screenToWorld(e.clientX - r.left, e.clientY - r.top);
+    const scale = lastScale;
+    const cellX = Math.floor(wx / scale), cellZ = Math.floor(wz / scale);
+    const tx = Math.floor(cellX / TILE_CELLS), tz = Math.floor(cellZ / TILE_CELLS);
+    // Peek rather than getTile: hovering should not reorder the LRU.
+    const tile = tiles.get(tileKey(scale, tx, tz));
+    if (!tile) { ui.hoverEl.textContent = '—'; return; } // not generated yet
+    const id = tile.ids[(cellZ - tz * TILE_CELLS) * TILE_CELLS + (cellX - tx * TILE_CELLS)];
     ui.hoverEl.textContent =
-      `${bx}, ${bz} — ${id >= 0 ? engine.biome2str(mcVersion, id) : 'unknown'}`;
+      `${cellX * scale}, ${cellZ * scale} — ${id >= 0 ? engine.biome2str(mcVersion, id) : 'unknown'}`;
   });
 
   // Scroll to zoom, anchored on the cursor — the world point under the pointer stays put.
@@ -206,6 +305,10 @@ export function create2D({ canvas, engine, palette, mcVersion, ui }) {
 
   return {
     setWorld(_seedText, x, z) {
+      // Every cached tile was generated under the previous seed/version. Serving one after a
+      // world change is a silent wrong-biome bug that looks exactly like correct output, so
+      // the cache is dropped wholesale — the same rule the Rust tile cache enforces.
+      tiles.clear();
       cx = x; cz = z;
       dirty = true;
       if (shown) draw();
