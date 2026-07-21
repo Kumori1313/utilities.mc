@@ -13,6 +13,7 @@ pub mod anvil;
 pub mod data;
 pub mod enchant;
 pub mod java_random;
+pub mod optimize;
 pub mod table;
 
 pub use anvil::{AnvilItem, CombineResult, combine, combine_sequence};
