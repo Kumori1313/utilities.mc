@@ -81,6 +81,17 @@ jobs:
       - name: Build engine, app and web
         run: ./scripts/build-all.sh
 
+      # A green build proved nothing before: the dead deploy compiled, served, and had correct
+      # MIME types. These two RUN the built artifacts. validate.mjs checks internal consistency
+      # across every route to a biome id; smoke.mjs asserts values confirmed outside this
+      # codebase (Chunkbase positions, a real anvil's costs) plus the i64 seed ABI. Both are
+      # verified to fail on the legalized build that shipped.
+      - name: Validate the built engine and cache
+        run: node scripts/validate.mjs
+
+      - name: Smoke-test the built artifacts
+        run: node scripts/smoke.mjs
+
       # No `enablement: true` here — the workflow's GITHUB_TOKEN cannot create a Pages site
       # ("Resource not accessible by integration"; it needs administration:write, which the
       # default token does not carry). Pages was instead enabled once out of band via
