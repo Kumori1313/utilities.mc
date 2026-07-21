@@ -1405,6 +1405,34 @@ Measure before planning here, because the split is not where it looks.
       right dimension's map. Nether fortresses in particular changed placement in 1.16; a check
       on the pinned version proves nothing about older ones once Part 13 lands.
 
+### End cities disagree with Chunkbase everywhere checked — layer withheld
+
+Three of three End cities checked on seed 1 / 1.21.3 were absent from Chunkbase: (352, 992),
+(992, -560) and (96, -1168). Unlike 12.6's occasional low-lying Overworld false positive, this
+is systematic, so the End layers are withheld from the UI rather than shipped with a caveat.
+The shim still exposes the types; only `STRUCTURE_TYPES` omits them, and the smoke test asserts
+they stay omitted so re-enabling has to be deliberate.
+
+- **Not the biome check.** All three sit in `end_midlands`/`end_highlands`, exactly what
+  Cubiomes requires — it accepts those two and rejects `the_end`, `small_end_islands` and
+  `end_barrens`.
+- **Not void terrain alone.** Cubiomes does provide an End height model
+  (`getEndSurfaceHeight`), and of 2,837 viable candidates within 20k blocks, 375 sit over void.
+  One of the three failures is among them — but the other two report solid land at y=57, the
+  same as candidates far out that have not been checked.
+- **Untested variable: distance.** All three sit near the inner edge of the outer End
+  (1,053-1,172 blocks, just past the ~1,024 boundary where `the_end` gives way to island
+  biomes). No far-out candidate has been checked, so "wrong everywhere" and "wrong only near
+  that boundary" are both still open.
+
+- [ ] **Resolve with one far-out check before re-enabling.** Pick candidates around 12k blocks
+      out, some on land and some over void by `getEndSurfaceHeight`, and compare. Land-present
+      plus void-absent would make the height model the missing filter — and using a function
+      Cubiomes ships is not the reverse-engineered heuristic 12.6 warns against. All-absent
+      would mean End city placement itself is wrong here and the layer should stay out.
+- [ ] End gateways are withheld alongside, not because they failed but because nothing about
+      them has been checked and they share the same untested path.
+
 ## 14.4 — The 3D view stays Overworld
 
 - [x] Disable, or clearly mark, the 3D toggle when a non-Overworld dimension is selected.

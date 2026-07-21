@@ -75,11 +75,16 @@ function typesHere() {
   return STRUCTURE_TYPES.filter((t) => t.dim === dimName());
 }
 function renderStructureList() {
-  $('struct-list').innerHTML = typesHere().map((t) =>
-    `<label class="chk"><input type="checkbox" data-struct="${t.id}">` +
-    `<span class="swatch" style="background:${t.color}"></span>${t.label}</label>`).join('');
-  $('loc-type').innerHTML = typesHere().map((t) =>
-    `<option value="${t.id}">${t.label}</option>`).join('');
+  const types = typesHere();
+  // The End currently offers none — its structures are withheld pending verification (see
+  // structures.js). Say so rather than showing an empty box that reads as a bug.
+  $('struct-list').innerHTML = types.length
+    ? types.map((t) =>
+        `<label class="chk"><input type="checkbox" data-struct="${t.id}">` +
+        `<span class="swatch" style="background:${t.color}"></span>${t.label}</label>`).join('')
+    : '<span class="hint">none available for this dimension yet</span>';
+  $('loc-type').innerHTML = types.map((t) => `<option value="${t.id}">${t.label}</option>`).join('');
+  $('structs').querySelector('.locate').classList.toggle('hidden', types.length === 0);
   // Selections and any drawn search belong to the old dimension's types.
   map2d.setStructureTypes([]);
   map2d.setNearest(null);

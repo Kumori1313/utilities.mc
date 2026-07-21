@@ -24,7 +24,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { createStructures } from '../web/src/structures.js';
+import { createStructures, STRUCTURE_TYPES } from '../web/src/structures.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const PUB = path.join(ROOT, 'web/public');
@@ -133,10 +133,11 @@ check('regression', 'nearest nether fortress',
 check('regression', 'nearest bastion',
   NS.nearest(0, 0, 'bastion', 1).targets.map((t) => [t.x, t.z]), [[192, 0]]);
 
-eng.setWorld(BigInt.asUintN(64, 1n), mc, 1);
-const ES = createStructures(eng);
-check('regression', 'nearest end city',
-  ES.nearest(0, 0, 'end_city', 1).targets.map((t) => [t.x, t.z]), [[352, 992]]);
+// No End city assertion: every one checked against Chunkbase was absent, so the layer is
+// withheld from the UI. Pinning its output would enshrine a result known to be wrong.
+// Instead, assert it stays withheld, so re-enabling it is a deliberate act that trips a test.
+check('ground', 'End structure types are withheld pending verification',
+  STRUCTURE_TYPES.filter((t) => t.dim === 'end').map((t) => t.id), []);
 
 // Leave the generator back in the Overworld for anything that follows.
 eng.setWorld(BigInt.asUintN(64, 1n), mc, 0);
