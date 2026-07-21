@@ -88,11 +88,17 @@ pub struct Plan {
     pub max_step: i32,
 }
 
-/// Minimum-cost order to apply `enchants` (each `(index, level)`) onto a blank item.
+/// Minimum-cost order to apply `enchants` (each `(index, level)`) onto an item that already
+/// carries `tool_prior_work` prior anvil operations.
+///
+/// Any enchantments already on the item are NOT passed here: they sit on the target and are
+/// never charged, so their only effect on cost is the tool's starting prior work — which is
+/// exactly what `tool_prior_work` captures. `enchants` is the set of *new* enchantments to
+/// add, one book each at its level.
 ///
 /// Returns `None` if there are more than [`MAX_ENCHANTS`] enchantments. Zero enchantments
 /// yields an empty, zero-cost plan.
-pub fn optimal_plan(enchants: &[(usize, i32)]) -> Option<Plan> {
+pub fn optimal_plan(enchants: &[(usize, i32)], tool_prior_work: u32) -> Option<Plan> {
     let n = enchants.len();
     if n > MAX_ENCHANTS {
         return None;
@@ -150,7 +156,7 @@ pub fn optimal_plan(enchants: &[(usize, i32)]) -> Option<Plan> {
     let mut dp_tool: Vec<Vec<Node>> = vec![Vec::new(); 1 << n];
     dp_tool[0] = vec![Node {
         cost: 0,
-        work: 0,
+        work: tool_prior_work,
         tree: Tree::Tool,
     }];
     for mask in 1u32..=full {
