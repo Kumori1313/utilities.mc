@@ -985,7 +985,8 @@ Start by reading where the two halves already stand, because they could hardly b
 apart and the work splits accordingly:
 
 - **The seed map is already version-parameterised, end to end.** `set_world(seed, mc_version,
-  dim)` takes a version int and validates it against Cubiomes' `MC_B1_7..MC_NEWEST`; `str2mc`
+  dim)` takes a version int and validates it against Cubiomes' full `MC_B1_7..MC_NEWEST` range
+  (wider than the 13.0 scope, which the registry narrows to `MC_1_8_9..MC_NEWEST`); `str2mc`
   converts a string to that enum; and the Rust tile cache already carries `version` in its
   `World` key, so changing it invalidates every cached tile. The *only* thing pinning the app
   to one version is a single hardcoded line in the frontend. This part is mostly UI.
@@ -996,6 +997,43 @@ apart and the work splits accordingly:
 
 Order below reflects that: the cheap half first to establish the UI shape, then the data
 layer, then the logic that the data cannot express, then verification.
+
+## 13.0 — Scope: 1.8.9 and above
+
+**Only versions 1.8.9 and later are in scope.** Everything below assumes that floor, and it is
+a well-chosen one for two independent reasons.
+
+- [ ] **The floor is exactly a Cubiomes enum entry — `MC_1_8_9` — so no approximation is
+      needed.** Cubiomes names each entry after the newest patch of its major release
+      (`MC_1_8_9`, `MC_1_7_10`, …, with `MC_1_8 = MC_1_8_9` as an alias), and its own header
+      notes that development targets only that newest patch, with minor releases and versions
+      ≤ 1.0 flagged experimental. The floor therefore also sits above the experimental band. It
+      excludes 9 entries (`MC_B1_7`, `MC_B1_8`, and 1.0 through 1.7.10) and leaves 18 usable
+      ones, `MC_1_8_9` through `MC_1_21_WD`.
+- [ ] **The floor makes the enchanting model uniform across the whole supported range.** The
+      3-slot, lapis-based enchanting system with the per-player xp seed — the model this
+      codebase implements throughout (`offered_levels` from an xp seed and a bookshelf count,
+      the per-slot re-seed) — arrives in 1.8. A range starting below it would need a second,
+      structurally different enchanting algorithm, not merely different numbers. **Confirm this
+      boundary before relying on it**; if the overhaul actually lands mid-1.8.x the floor is
+      still safe, but the reasoning should be checked rather than inherited from this guide.
+      With it confirmed, 13.4's audit is about parameters and content, not about a second
+      algorithm.
+- [ ] **The ceiling is `MC_NEWEST`, currently `MC_1_21_WD` (Winter Drop).** The vendored
+      Cubiomes tops out there, so the seed map cannot target 26.x at all today regardless of the
+      floor — worth stating plainly, since that is the version actually being played. Closing
+      that gap is the vendor bump described in 13.2, and it depends on upstream Cubiomes
+      supporting the version at all.
+- [ ] **Enforce the floor in exactly one place — the registry — and derive every list from it.**
+      A floor re-implemented as scattered `>=` comparisons will disagree with itself, and the
+      version strings involved do not compare naturally (see 13.1).
+- [ ] **Landmine — the two halves change at different granularities, so the version list is not
+      one list.** Cubiomes carries one entry per major release (with a few exceptions:
+      `MC_1_16_1` vs `MC_1_16_5`, `MC_1_19_2` vs `MC_1_19_4`, and three separate 1.21 entries),
+      because that is where *biome generation* changes. Enchantment content changes on entirely
+      different boundaries. Map a canonical version key to both a Cubiomes enum value and an
+      enchantment dataset id, and expect the mapping to be many-to-one in both directions —
+      several biome-distinct versions can share one enchantment dataset, and vice versa.
 
 ## 13.1 — Decide the version model before writing any of it
 
@@ -1032,7 +1070,9 @@ Nearly free; do it first to prove the registry and the selector UI.
       tell it.
 - [ ] **Validate before use.** `set_world` returns -1 outside `MC_B1_7..MC_NEWEST`, and `str2mc`
       on an unrecognised string does not return a usable version. Check both; do not feed the
-      result straight into a generate call.
+      result straight into a generate call. Note that the shim's check is **wider than the 13.0
+      scope** — it accepts 1.7.10 and the betas — so it will not catch a below-floor version on
+      its own. The registry is what enforces the floor.
 - [ ] **Landmine — you cannot offer a version newer than the vendored Cubiomes knows.**
       `MC_NEWEST` is a compile-time ceiling from the vendored C source. Supporting a newer
       Minecraft means updating the Cubiomes vendor, which is a dependency bump with its own
@@ -1089,8 +1129,10 @@ version-independent merely because it currently passes for 1.21.3.
       exactly this kind of change. This is why per-version golden vectors are non-negotiable.
 - [ ] **Landmine — the anvil cross-checks were version-spanning by luck, not by design.** The
       hand-verified anvil results matched on both 1.21.3 and 26.2, which is evidence those
-      mechanics are stable across that gap — not evidence that they are stable everywhere. Older
-      versions are the risk.
+      mechanics are stable across that gap — not evidence that they are stable everywhere. The
+      untested span is the whole of 1.8.9 → 1.21.3, and that is where the risk sits. In
+      particular, confirm when the survival "too expensive" cap took its current form rather
+      than assuming the 39 in `TOO_EXPENSIVE_LIMIT` holds at the bottom of the range.
 - [ ] Where a rule genuinely differs, gate it on the version explicitly at the call site rather
       than branching deep inside a helper, so the difference is visible when reading the
       algorithm.
