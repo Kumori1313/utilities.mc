@@ -1107,7 +1107,24 @@ Nearly free; do it first to prove the registry and the selector UI.
       that rots on the next submodule bump), and the list reads monotonically with no sort at
       all. Show the covered span too — "1.16.5" alone does not tell someone running 1.16.3 that
       it is their entry, which is the actual user-facing cost of the understated labels.
-      Keep the round-trip guard on the *displayed* label, not the one `mc2str` returned.
+      Keep the round-trip guard on a string the engine actually resolves, and keep that string
+      separate from the displayed one (`key` vs `label`) — see the next item for why they must
+      be allowed to diverge.
+- [x] **Landmine — one entry has a placeholder name, not a version.** `MC_1_21_WD` was added
+      from snapshot **24w40a**, before the Winter Drop's number was announced; `biomes.h` still
+      reads "version TBA" and `mc2str` still returns `"1.21 WD"`, even though upstream's own
+      biome comment in `util.c` already calls it 1.21.4. It shipped as **1.21.4** ("The Garden
+      Awakens"), adding `pale_garden` and swapping in the `btree21wd` biome tree.
+      Two consequences. First, the label is useless to a player deciding whether it is their
+      version, so display the real one — but note this is the **only** label not derived from
+      the engine, and `str2mc("1.21.4")` does not resolve, which is exactly why the round-trip
+      guard has to run on `key` instead. Keep the override keyed on the exact placeholder string
+      so a submodule bump that renames the enum makes it go quiet rather than mislabel some
+      other entry, and assert in the smoke test that precisely one label diverges.
+      Second, and more important: a snapshot-derived tree is **not** self-evidently the released
+      version's tree. That gap is only closed by checking it against the real thing — here, a
+      Chunkbase comparison on 1.21.4 specifically. Until such a check exists, an entry like this
+      deserves less trust than its neighbours, not equal trust because it happens to be newest.
 - [x] Re-run a handful of Part 8 Chunkbase spot-checks **per offered version**, not once. Biome
       generation changed substantially across versions (1.18 in particular); a check that passes
       on 1.21.3 says nothing about 1.16.
@@ -1116,6 +1133,9 @@ Nearly free; do it first to prove the registry and the selector UI.
       1.17/1.18 split separately — because 18 per-version witnesses prove nothing if they cannot
       disagree. Were `set_world` to ignore its version argument, every one of them would still
       pass as a single uniform block; the boundary assertion is what makes the set meaningful.
+      The newest entry was compared against Chunkbase's **1.21.4** in particular, which is what
+      confirms both the identity of the "1.21 WD" placeholder and that its snapshot-derived
+      biome tree matches the released version.
       **Biomes only.** Structures are still verified on 1.21.3 alone, and region salts and
       viability rules are version-parameterised too, so biome agreement says nothing about them.
 

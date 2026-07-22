@@ -29,6 +29,23 @@ function preciseLabel(engine, v, base) {
   return base;
 }
 
+// The one label not derived from the engine.
+//
+// `MC_1_21_WD` was added from snapshot 24w40a, before the Winter Drop's version number was
+// announced — `biomes.h` still says "version TBA" and `mc2str` still returns the placeholder,
+// even though upstream's own biome comment in util.c already calls it 1.21.4. "1.21 WD" tells
+// a player nothing about whether it is their version, so display the real one. (It shipped as
+// 1.21.4, "The Garden Awakens"; the entry adds `pale_garden` and swaps in the btree21wd biome
+// tree. Confirmed against Chunkbase's 1.21.4 on seed 1, which is also what tells us the
+// snapshot-derived tree matches the released version.)
+//
+// Deliberately narrow, because a hardcoded label is exactly the thing that rots on a submodule
+// bump: it is keyed on the exact placeholder `mc2str` returns, and it changes the DISPLAY only.
+// `str2mc("1.21.4")` does not resolve, so the round-trip guard keeps using the engine's own
+// spelling via `key`. If a bump renames the enum — or adds a real 1.21.4 alongside a new Winter
+// Drop — this simply stops matching and goes quiet rather than mislabelling a different entry.
+const DISPLAY_OVERRIDE = { '1.21 WD': '1.21.4' };
+
 const NUMERIC = /^(\d+\.\d+)\.(\d+)$/;
 
 // The lower end of the range an entry covers, given the entry before it: "1.16.2" after
@@ -41,11 +58,14 @@ function rangeFrom(label, prev) {
 }
 
 /**
- * Build the offered version list: `{ id, label, covers }`, oldest first.
+ * Build the offered version list: `{ id, key, label, covers }`, oldest first.
  *
  * `label` is the precise top of the entry ("1.16.5"); `covers` spells out the whole span
  * ("1.16.2 – 1.16.5") so someone running 1.16.3 can tell which entry is theirs — that is the
- * question the family labels leave unanswerable.
+ * question the family labels leave unanswerable. `key` is the engine's own spelling, kept
+ * separate because it is what must round-trip through `str2mc`; only the Winter Drop entry
+ * currently differs from `label`. Nothing at runtime passes either string to the engine — the
+ * selector carries `id` — so the strings are for humans and for the guard.
  */
 export function buildVersions(engine, floorLabel = '1.8.9') {
   const floor = engine.str2mc(floorLabel);
@@ -59,13 +79,13 @@ export function buildVersions(engine, floorLabel = '1.8.9') {
   for (let v = floor - 1; v <= newest; v++) {
     const base = engine.mc2str(v);
     // Round-trip guard: only offer a version whose own label parses back to it, so a selector
-    // entry can never resolve to a different world than the one it names. `preciseLabel` only
-    // ever returns a string that round-trips, so the guard covers the displayed label too.
+    // entry can never resolve to a different world than the one it names.
     if (!base || engine.str2mc(base) !== v) { prev = null; continue; }
-    const label = preciseLabel(engine, v, base);
+    const key = preciseLabel(engine, v, base);
+    const label = DISPLAY_OVERRIDE[base] ?? key;
     if (v >= floor) {
       const from = rangeFrom(label, prev);
-      out.push({ id: v, label, covers: from && from !== label ? `${from} – ${label}` : label });
+      out.push({ id: v, key, label, covers: from && from !== label ? `${from} – ${label}` : label });
     }
     prev = label;
   }

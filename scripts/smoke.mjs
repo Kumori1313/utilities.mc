@@ -217,11 +217,16 @@ check('ground', '1.8.9 resolves (the agreed scope floor)', floor > 0, true);
 const registry = buildVersions(eng);
 check('ground', 'every version in range is offered', registry.length, newest - floor + 1);
 check('regression', 'offered version count', registry.length, 18);
-// Every offered label must parse back to its own entry, or a selector option could load a
-// different world than the one it names. This must hold for the label actually DISPLAYED, which
-// is no longer the one mc2str returns.
-check('ground', 'all offered labels round-trip through str2mc',
-  registry.filter((v) => eng.str2mc(v.label) !== v.id), []);
+// Every offered entry must carry a string that parses back to it, or an option could resolve to
+// a different world than the one it names. That guard lives on `key` — the engine's own
+// spelling — because one displayed label is deliberately not the engine's.
+check('ground', 'every entry round-trips through str2mc on its key',
+  registry.filter((v) => eng.str2mc(v.key) !== v.id), []);
+// The display override is meant to be a single documented exception, not a habit. Anything else
+// drifting away from the engine's spelling should show up here.
+check('ground', 'exactly one label differs from the engine spelling',
+  registry.filter((v) => v.label !== v.key).map((v) => [v.key, v.label]),
+  [['1.21 WD', '1.21.4']]);
 // A version outside the enum must not silently resolve to something plausible.
 check('ground', 'an unknown version string does not resolve', eng.str2mc('26.2'), 0);
 
@@ -233,13 +238,14 @@ check('ground', 'an unknown version string does not resolve', eng.str2mc('26.2')
 check('ground', 'labels are the precise top of each entry, in release order',
   registry.map((v) => v.label),
   ['1.8.9', '1.9.4', '1.10.2', '1.11.2', '1.12.2', '1.13.2', '1.14.4', '1.15.2', '1.16.1',
-   '1.16.5', '1.17.1', '1.18.2', '1.19.2', '1.19.4', '1.20.6', '1.21.1', '1.21.3', '1.21 WD']);
+   '1.16.5', '1.17.1', '1.18.2', '1.19.2', '1.19.4', '1.20.6', '1.21.1', '1.21.3', '1.21.4']);
 // The property behind that list, checked independently of it: strictly increasing as version
-// tuples. The unreleased Winter Drop has no number, so it is only allowed to be last.
+// tuples. Every label is numeric now that the Winter Drop placeholder is resolved, but the
+// check does not assume that — a future TBA entry is allowed, provided it sorts last.
 const tuple = (s) => /^\d+(\.\d+)*$/.test(s) ? s.split('.').map(Number) : null;
 const ordered = registry.map((v) => tuple(v.label));
-check('ground', 'only the final entry may be a non-numeric release',
-  ordered.findIndex((t) => t === null), ordered.length - 1);
+check('ground', 'no numeric label follows a non-numeric one',
+  ordered.filter((t, i) => t && ordered.slice(0, i).some((p) => !p)), []);
 const cmp = (a, b) => {
   for (let i = 0; i < Math.max(a.length, b.length); i++) {
     const d = (a[i] ?? 0) - (b[i] ?? 0);
@@ -258,7 +264,7 @@ check('ground', 'covered ranges are contiguous and complete',
   ['1.8 – 1.8.9', '1.9 – 1.9.4', '1.10 – 1.10.2', '1.11 – 1.11.2', '1.12 – 1.12.2',
    '1.13 – 1.13.2', '1.14 – 1.14.4', '1.15 – 1.15.2', '1.16 – 1.16.1', '1.16.2 – 1.16.5',
    '1.17 – 1.17.1', '1.18 – 1.18.2', '1.19 – 1.19.2', '1.19.3 – 1.19.4', '1.20 – 1.20.6',
-   '1.21 – 1.21.1', '1.21.2 – 1.21.3', '1.21 WD']);
+   '1.21 – 1.21.1', '1.21.2 – 1.21.3', '1.21.4']);
 
 const versions = registry.map((v) => [v.id, v.label]);
 
@@ -281,6 +287,10 @@ check('ground', 'villages present in every offered version',
 // version and matched throughout. The origin cell is the pinned witness for each, since it is
 // the centre of any view compared. The split below is therefore an observed fact about the two
 // generators, not a guess: `ocean` through 1.17, `deep_ocean` from 1.18.
+//
+// The newest entry was compared against Chunkbase's **1.21.4** specifically. That matters twice:
+// it is what identifies Cubiomes' "1.21 WD" placeholder as the released Winter Drop, and it is
+// the only evidence that the snapshot-derived (24w40a) biome tree still matches what shipped.
 //
 // What this still does not cover is structures, which were only ever checked on 1.21.3. Region
 // salts and viability rules are version-parameterised too, and biomes agreeing says nothing
