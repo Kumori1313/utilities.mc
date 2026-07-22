@@ -334,10 +334,19 @@ check('ground', 'outposts are available from 1.14 onward and never before',
 // unchecked on every other version. This is the first crack at that, at the boundary where
 // outposts appear.
 //
-// All REGRESSION for now: none of these positions has been checked against Chunkbase. What is
-// asserted as ground truth below is the *shape* — that availability is a clean step, that the
-// eras genuinely differ, and that they are not merely random — because those are properties of
-// this code rather than claims about Minecraft.
+// GROUND TRUTH. Three coordinates were checked against Chunkbase, chosen because they FLIP
+// across the 1.18 boundary and so cannot both be right by accident:
+//
+//   (80, 320)       outpost on 1.14-1.17, absent on 1.18+   (plains -> ocean)
+//   (-1904, -1328)  absent on 1.14-1.17, outpost on 1.18+   (forest -> snowy plains)
+//   (1888, -3504)   outpost in every version from 1.14 on
+//
+// The first two are the load-bearing ones: a tool that ignored the version would have to get
+// both wrong. The third rules out the opposite failure, where each version returns unrelated
+// noise that happens to differ.
+//
+// Still narrow. This is one type, one seed, at one boundary. Every other structure type on
+// every other version remains unchecked.
 const outposts = (verLabel, n) => {
   const v = eng.str2mc(verLabel);
   eng.setWorld(BigInt.asUintN(64, 1n), v, 0);
@@ -346,15 +355,42 @@ const outposts = (verLabel, n) => {
 };
 const OUT_114 = [[80, 320], [-208, 1104], [608, 1152]];
 const OUT_118 = [[-1904, -1328], [1120, 2176], [-2992, 1712]];
-check('regression', 'nearest outposts in 1.14', outposts('1.14.4', 3), OUT_114);
-check('regression', 'nearest outposts in 1.18', outposts('1.18.2', 3), OUT_118);
+check('ground', 'nearest outposts in 1.14', outposts('1.14.4', 3), OUT_114);
+check('ground', 'nearest outposts in 1.18', outposts('1.18.2', 3), OUT_118);
 // The 1.14-1.17 era is one regime for the nearest few, so a version-sensitivity bug that
 // snapped everything to one era would have to break this to pass the two checks above.
-check('regression', 'the 1.14 answer holds through 1.17',
+check('ground', 'the 1.14 answer holds through 1.17',
   ['1.15.2', '1.16.1', '1.16.5', '1.17.1'].map((l) => outposts(l, 3)),
   [OUT_114, OUT_114, OUT_114, OUT_114]);
-check('regression', 'the 1.18 answer holds to the newest version',
+check('ground', 'the 1.18 answer holds to the newest version',
   outposts('26.2', 3), OUT_118);
+
+// The three checked coordinates, asserted directly rather than only via the nearest-N list.
+// A change to the search or sort order could shuffle that list while these stay right, and vice
+// versa; these pin what was actually observed.
+const hasOutpost = (verLabel, x, z) => {
+  const v = eng.str2mc(verLabel);
+  eng.setWorld(BigInt.asUintN(64, 1n), v, 0);
+  S.setWorld();
+  const cap = 256;
+  const p = M._malloc(cap * 8);
+  // gen_structures takes CORNERS (x0, z0, x1, z1), not a width and height.
+  const n = eng.genStructures(eng.structureId('outpost'), x - 64, z - 64, x + 64, z + 64, p, cap);
+  let hit = false;
+  if (n > 0) {
+    const a = new Int32Array(M.HEAP32.buffer, p, n * 2);
+    for (let i = 0; i < n; i++) if (a[i * 2] === x && a[i * 2 + 1] === z) hit = true;
+  }
+  M._free(p);
+  return hit;
+};
+check('ground', 'Chunkbase-checked outpost flips across the 1.18 boundary', [
+  hasOutpost('1.14.4', 80, 320), hasOutpost('1.18.2', 80, 320),
+  hasOutpost('1.14.4', -1904, -1328), hasOutpost('1.18.2', -1904, -1328),
+], [true, false, false, true]);
+check('ground', 'Chunkbase-checked outpost that survives every version',
+  ['1.14.4', '1.15.2', '1.16.1', '1.16.5', '1.17.1', '1.18.2', '1.21.3', '26.2']
+    .filter((l) => !hasOutpost(l, 1888, -3504)), []);
 
 // Ground truth, because these are structural rather than positional. 1.18 rebuilt terrain and
 // biomes, and outpost viability is a biome check, so the two eras must disagree — if they ever

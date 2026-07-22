@@ -242,3 +242,20 @@ export function createStructures(engine) {
     },
   };
 }
+
+/// Carry a set of selected structure types across a rebuild of the list.
+///
+/// The checkbox list is regenerated whenever the version or dimension changes, so the selection
+/// has to live outside it. Switching 1.21.3 -> 1.20 should keep villages and drop trial
+/// chambers; switching to the Nether drops nearly everything. That is one rule, not two.
+///
+/// Returns `{ kept, dropped }`, both in the caller's original order. `dropped` is returned
+/// rather than discarded because a selection that disappears without explanation reads as the
+/// tool forgetting — and one silently kept while inert is worse, since the map would then show
+/// nothing for a type that still looks selected.
+export function carrySelection(selected, availableIds) {
+  const here = availableIds instanceof Set ? availableIds : new Set(availableIds);
+  const kept = [], dropped = [];
+  for (const id of selected) (here.has(id) ? kept : dropped).push(id);
+  return { kept, dropped };
+}

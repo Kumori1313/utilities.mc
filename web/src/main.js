@@ -7,7 +7,7 @@ import { create2D, depthMatters, SEA_LEVEL } from './map2d.js';
 import { create3D } from './map3d.js';
 import { setupEnchant } from './enchant-ui.js';
 import { setupPortal } from './portal-ui.js';
-import { createStructures, STRUCTURE_TYPES, DIMENSIONS } from './structures.js';
+import { createStructures, carrySelection, STRUCTURE_TYPES, DIMENSIONS } from './structures.js';
 import { buildVersions } from './versions.js';
 
 const $ = (id) => document.getElementById(id);
@@ -117,32 +117,73 @@ function typesHere() {
   // new type and once per Cubiomes bump.
   return STRUCTURE_TYPES.filter((t) => engine.structureSupported(t.id) === 1);
 }
+// Which types the user has ticked, kept OUTSIDE the DOM so it survives the list being rebuilt.
+// The checkboxes are regenerated whenever the version or dimension changes, and reading the
+// selection back off them would mean the rebuild silently defines it.
+const selectedTypes = new Set();
+// Types dropped by the last rebuild, so the UI can say what went rather than losing it quietly.
+let droppedTypes = [];
+
 function renderStructureList() {
   const types = typesHere();
+  const here = new Set(types.map((t) => t.id));
+
+  // Carry the selection across the rebuild, keeping only what the new world actually has.
+  // Switching 1.21.3 -> 1.20 keeps villages and drops trial chambers; switching to the Nether
+  // drops nearly everything, which is the same rule rather than a special case.
+  //
+  // Announced, not silent (13.5): a selection that vanishes with no explanation reads as the
+  // tool forgetting, and one that is silently retained-but-inert is worse.
+  const carried = carrySelection(selectedTypes, here);
+  droppedTypes = carried.dropped;
+  selectedTypes.clear();
+  for (const id of carried.kept) selectedTypes.add(id);
+
   // The End currently offers none — its structures are withheld pending verification (see
   // structures.js). Say so rather than showing an empty box that reads as a bug.
   $('struct-list').innerHTML = types.length
     ? types.map((t) =>
-        `<label class="chk"><input type="checkbox" data-struct="${t.id}">` +
+        `<label class="chk"><input type="checkbox" data-struct="${t.id}"` +
+        `${selectedTypes.has(t.id) ? ' checked' : ''}>` +
         `<span class="swatch" style="background:${t.color}"></span>${t.label}</label>`).join('')
     : '<span class="hint">none available for this dimension yet</span>';
+
+  // The locator's chosen type survives the same way, but its RESULTS cannot: those are
+  // positions from the previous world and would draw just as convincingly against the new one.
+  const wantLoc = $('loc-type').value;
   $('loc-type').innerHTML = types.map((t) => `<option value="${t.id}">${t.label}</option>`).join('');
+  if (here.has(wantLoc)) $('loc-type').value = wantLoc;
   $('structs').querySelector('.locate').classList.toggle('hidden', types.length === 0);
-  // Selections and any drawn search belong to the old dimension's types.
-  map2d.setStructureTypes([]);
   map2d.setNearest(null);
   $('loc-out').textContent = '';
   syncStructures();
 }
 function syncStructures() {
   const on = [...document.querySelectorAll('#struct-list input:checked')].map((i) => i.dataset.struct);
+  // The DOM is the source of truth for a click; the Set is the source of truth across rebuilds.
+  // Rewriting it wholesale here keeps them from drifting apart, which is the failure mode of
+  // trying to patch the Set from individual change events.
+  selectedTypes.clear();
+  for (const id of on) selectedTypes.add(id);
   map2d.setStructureTypes(on);
-  $('struct-hint').textContent = on.length
-    ? `shown under ${structures.maxBlocksAcross.toLocaleString()} blocks wide · positions pass ` +
-      `the biome rule, so a small fraction may not generate`
-    : '';
+  const notes = [];
+  if (on.length) {
+    notes.push(`shown under ${structures.maxBlocksAcross.toLocaleString()} blocks wide · ` +
+      `positions pass the biome rule, so a small fraction may not generate`);
+  }
+  if (droppedTypes.length) {
+    const names = droppedTypes
+      .map((id) => (STRUCTURE_TYPES.find((t) => t.id === id)?.label ?? id).toLowerCase());
+    notes.push(`${names.join(', ')} not in this world — deselected`);
+  }
+  $('struct-hint').textContent = notes.join(' · ');
 }
-$('struct-list').addEventListener('change', syncStructures);
+$('struct-list').addEventListener('change', () => {
+  // The "deselected" note describes the last rebuild. Once the user touches the list it is
+  // stale, and a note that outlives what it explains is worse than none.
+  droppedTypes = [];
+  syncStructures();
+});
 
 // Non-structure overlays. Both are Overworld-only: slimes spawn there, and world spawn is an
 // Overworld concept the engine refuses to answer elsewhere.

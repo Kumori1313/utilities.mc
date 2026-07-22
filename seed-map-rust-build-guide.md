@@ -1386,15 +1386,21 @@ externally yet. What is ground truth is the shape:
   "same generator, different rules" from "two unrelated random streams"; a survivor can.
   (1888, -3504) is an outpost in every version from 1.14 on.
 
-- [ ] Check these against Chunkbase. The sharp ones are coordinates that *flip*:
+- [x] Checked against Chunkbase — **all three match**. The sharp ones are coordinates that *flip*,
+      because a version-blind tool would have to get both wrong:
       | coordinate | 1.14–1.17 | 1.18+ |
       |---|---|---|
       | (80, 320) | outpost (plains) | none (ocean) |
       | (-1904, -1328) | none (forest) | outpost (snowy plains) |
       | (1888, -3504) | outpost | outpost |
-      Plus the negative case: **1.13 should show no outposts at all, anywhere.**
+      The third is the control: full disagreement between eras would be equally consistent with
+      the tool emitting unrelated noise per version, and a survivor rules that out.
+      Outpost positions at 1.14 and 1.18 are now ground truth. Note how narrow that still is —
+      one type, one seed, one boundary — and that it is worth stating in those terms rather than
+      as "structures are verified".
 - [ ] Then repeat for one pre-1.18 type that is not gated on 1.14 — village or desert pyramid —
-      to separate "outposts are right" from "1.18 is handled right".
+      to separate "outposts are right" from "1.18 is handled right". Those two claims are
+      currently entangled: every outpost check that discriminates does so at the 1.18 boundary.
 
 ## 12.6 — Structure coverage beyond the verified four
 
