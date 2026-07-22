@@ -392,6 +392,147 @@ check('ground', 'Chunkbase-checked outpost that survives every version',
   ['1.14.4', '1.15.2', '1.16.1', '1.16.5', '1.17.1', '1.18.2', '1.21.3', '26.2']
     .filter((l) => !hasOutpost(l, 1888, -3504)), []);
 
+// --- Nether and End structures across versions ---
+//
+// Both dimensions had NO external verification of structure positions at any version until now,
+// and the End's cities/gateways were checked only on 1.21.3. This is the per-version pass.
+//
+// Set up as its own helper because these need a dimension as well as a version.
+const boxIn = (verId, dim, type, r = 3000) => {
+  if (eng.setWorld(BigInt.asUintN(64, 1n), verId, dim) !== 0) return null;
+  if (eng.structureSupported(type) !== 1) return null;
+  const cap = 16384, p = M._malloc(cap * 8);
+  const n = eng.genStructures(eng.structureId(type), -r, -r, r, r, p, cap);
+  const out = new Set();
+  if (n > 0) {
+    const a = new Int32Array(M.HEAP32.buffer, p, n * 2);
+    for (let i = 0; i < n; i++) out.add(`${a[i * 2]},${a[i * 2 + 1]}`);
+  }
+  M._free(p);
+  return out;
+};
+const hasAt = (verId, dim, type, x, z) => {
+  const s = boxIn(verId, dim, type);
+  return s ? s.has(`${x},${z}`) : false;
+};
+
+// Availability steps, asserted across the whole list rather than at one boundary pair.
+check('ground', 'nether fortresses exist in every offered version',
+  registry.filter((v) => {
+    eng.setWorld(BigInt.asUintN(64, 1n), v.id, -1);
+    return eng.structureSupported('fortress') !== 1;
+  }), []);
+check('ground', 'bastions are available from 1.16 onward and never before',
+  registry.map((v) => {
+    eng.setWorld(BigInt.asUintN(64, 1n), v.id, -1);
+    return [v.label, eng.structureSupported('bastion') === 1];
+  }),
+  registry.map((v) => [v.label, v.id >= eng.str2mc('1.16.1')]));
+
+// Structural invariant, ground truth because it follows from the configs rather than from any
+// observation: s_fortress and s_bastion share a salt (30084232) AND a region grid (27 chunks),
+// so a region holds one or the other, never both. If this ever fails, either the configs have
+// diverged upstream or the region math here is wrong — and both would be silent otherwise.
+const FB_REGION = 27 * 16;
+const regionsOf = (set) => new Set([...set].map((s) => {
+  const [x, z] = s.split(',').map(Number);
+  return `${Math.floor(x / FB_REGION)},${Math.floor(z / FB_REGION)}`;
+}));
+// Counted over regions FULLY inside the scan box, so edge clipping cannot be mistaken for an
+// empty region. Note that "no region holds both" alone would be a weak assertion — a wrongly
+// small region size satisfies it trivially, since two structures never share a block. Counting
+// the partition is what makes it bite.
+const FB_BOX = 3000;
+const fbCensus = (verId) => {
+  const F = regionsOf(boxIn(verId, -1, 'fortress'));
+  const B = regionsOf(boxIn(verId, -1, 'bastion'));
+  const lo = Math.ceil(-FB_BOX / FB_REGION), hi = Math.floor(FB_BOX / FB_REGION) - 1;
+  let one = 0, none = 0, both = 0, total = 0;
+  for (let gx = lo; gx <= hi; gx++) {
+    for (let gz = lo; gz <= hi; gz++) {
+      total++;
+      const k = `${gx},${gz}`, f = F.has(k), b = B.has(k);
+      if (f && b) both++; else if (f || b) one++; else none++;
+    }
+  }
+  return { total, one, none, both };
+};
+const withBastions = registry.filter((v) => v.id >= eng.str2mc('1.16.1'));
+check('ground', 'no Nether region holds both a fortress and a bastion',
+  withBastions.map((v) => [v.label, fbCensus(v.id).both]).filter(([, n]) => n !== 0), []);
+// From 1.18 the pair partitions the grid exactly: fortresses generate precisely where bastions
+// do not, so every region holds one. That is the rule in the source, asserted as a count.
+check('ground', 'from 1.18 every Nether region holds exactly one of the pair',
+  withBastions.filter((v) => v.id >= eng.str2mc('1.18')).map((v) => {
+    const c = fbCensus(v.id);
+    return [v.label, c.one === c.total];
+  }).filter(([, ok]) => !ok), []);
+// And before 1.18 it does not — each rolled independently, so some regions get neither. This
+// separates the two eras structurally rather than by position, and would fail if the 1.18 rule
+// were applied to every version.
+check('ground', 'before 1.18 some Nether regions hold neither',
+  withBastions.filter((v) => v.id < eng.str2mc('1.18')).map((v) => fbCensus(v.id).none > 0),
+  withBastions.filter((v) => v.id < eng.str2mc('1.18')).map(() => true));
+
+// The sharpest Nether test: 1.18 swapped which of the pair each region gets, so these two
+// coordinates exchange structure type across the boundary. A version-blind tool cannot produce
+// that, and neither can one that merely shifts positions.
+const V17 = eng.str2mc('1.17.1'), V18 = eng.str2mc('1.18.2');
+check('regression', 'a Nether region that swaps fortress for bastion at 1.18',
+  [hasAt(V17, -1, 'fortress', 192, 0), hasAt(V17, -1, 'bastion', 192, 0),
+   hasAt(V18, -1, 'fortress', 192, 0), hasAt(V18, -1, 'bastion', 192, 0)],
+  [true, false, false, true]);
+check('regression', 'and one that swaps the other way',
+  [hasAt(V17, -1, 'fortress', 112, 528), hasAt(V17, -1, 'bastion', 112, 528),
+   hasAt(V18, -1, 'fortress', 112, 528), hasAt(V18, -1, 'bastion', 112, 528)],
+  [false, true, true, false]);
+// Controls: unchanged across the same boundary, so the swap above is not just everything moving.
+check('regression', 'a fortress unchanged across 1.18',
+  [hasAt(V17, -1, 'fortress', 336, -128), hasAt(V18, -1, 'fortress', 336, -128)], [true, true]);
+check('regression', 'a bastion unchanged across 1.18',
+  [hasAt(V17, -1, 'bastion', -256, -432), hasAt(V18, -1, 'bastion', -256, -432)], [true, true]);
+
+// End cities: the position set is IDENTICAL in every version that has them. That matters
+// because the 18-observation Chunkbase check above was done on 1.21.3 only — with invariance
+// asserted here, that one verification covers all 22 versions rather than one.
+const cityRef = boxIn(eng.str2mc('1.21.3'), 1, 'end_city');
+check('ground', 'End city positions are identical in every version offering them',
+  registry.map((v) => {
+    const s = boxIn(v.id, 1, 'end_city');
+    return [v.label, s === null ? 'absent' : ([...s].sort().join('|') === [...cityRef].sort().join('|'))];
+  }).filter(([, r]) => r !== true && r !== 'absent'), []);
+check('ground', 'End cities are available from 1.9 onward and never before',
+  registry.map((v) => {
+    eng.setWorld(BigInt.asUintN(64, 1n), v.id, 1);
+    return [v.label, eng.structureSupported('end_city') === 1];
+  }),
+  registry.map((v) => [v.label, v.id >= eng.str2mc('1.9')]));
+
+// End gateways are the opposite: four distinct config regimes. Cubiomes selects
+// s_end_gateway_115 / _116 / _117 / default, so the regime boundaries must land exactly there.
+// Unlike the cities, the 1.21.3 verification covers only the newest of the four.
+const gwRegime = (v) => {
+  const s = boxIn(v, 1, 'end_gateway');
+  return s === null ? 'absent' : [...s].sort().join('|');
+};
+const gwSeen = [];
+for (const v of registry) {
+  const r = gwRegime(v.id);
+  if (!gwSeen.length || gwSeen[gwSeen.length - 1][1] !== r) gwSeen.push([v.label, r]);
+}
+check('ground', 'End gateway regimes change exactly at the documented config boundaries',
+  gwSeen.map(([l]) => l), ['1.8.9', '1.13.2', '1.16.1', '1.17.1', '1.18.2']);
+check('regression', 'nearest End gateway in each unverified regime',
+  ['1.13.2', '1.16.1', '1.17.1'].map((l) => {
+    eng.setWorld(BigInt.asUintN(64, 1n), eng.str2mc(l), 1);
+    const G = createStructures(eng);
+    G.setWorld();
+    return G.nearest(0, 0, 'end_gateway', 1).targets.map((t) => [t.x, t.z])[0];
+  }),
+  [[-1501, 311], [-1085, -403], [-1200, -132]]);
+
+eng.setWorld(BigInt.asUintN(64, 1n), mc, 0); // restore the Overworld for what follows
+
 // --- desert pyramids: a type that exists in every version ---
 //
 // The outpost checks entangle two claims, because outposts arrive AT 1.14 and change AT 1.18:

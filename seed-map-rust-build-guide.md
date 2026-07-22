@@ -1447,10 +1447,57 @@ offender instead of printing two 23-element arrays to diff by eye.
 With this, the two claims that were entangled are separated: outposts cover the introduction
 gate at 1.14, pyramids cover version-dependent viability at 1.18 for a type present throughout.
 
-- [ ] **Remaining structure gaps**, in rough order of value: the other 21 types are still checked
-      on 1.21.3 alone; the pre-1.18 boundaries (1.9, 1.16) have no verified coordinate at all,
-      and the footprint screen is uncalibrated there, so finding one needs a different method;
-      and the Nether and End have no per-version structure check whatsoever.
+- [ ] **Remaining structure gaps**: the other 21 Overworld types are still checked on 1.21.3
+      alone, and the pre-1.18 Overworld boundaries (1.9, 1.16) have no verified coordinate — every
+      flip candidate there failed the footprint screen, which is itself uncalibrated below 1.18,
+      so that needs a different method rather than more searching. 13.9 covers the other two
+      dimensions.
+
+## 13.9 — Nether and End structures across versions
+
+The Nether had **no external verification at any version**: fortress and bastion positions were
+regression-only from the day they were added. The End was checked on 1.21.3 alone. This closes
+the per-version question for both, and finds that the two dimensions need opposite treatment.
+
+**The End is nearly free.** Nether biomes change exactly once, at 1.16, and are byte-identical
+from 1.16.1 onward; End biomes never change at all across the offered range. So:
+
+- **End cities have ONE regime.** Their positions are identical in every version that has them
+  (1.9 onward). That matters because the 18-observation Chunkbase check from Part 14 was done on
+  1.21.3 only — with invariance asserted, that single verification now covers all 22 versions.
+  This is the cheapest result in the whole verification effort, and it came from measuring
+  something that was assumed to need 22 checks.
+- **End gateways are the opposite**: four config regimes (`s_end_gateway_115` / `_116` / `_117` /
+  default), so the boundaries land at 1.13, 1.16, 1.17 and 1.18. The existing check covers only
+  the newest. Three regimes remain unverified.
+
+**The Nether has a structural invariant worth more than any coordinate.** `s_fortress` and
+`s_bastion` share a salt (30084232) *and* a region grid (27 chunks), so a region holds one or the
+other, never both. From 1.18 they partition it exactly — fortresses generate precisely where
+bastions do not — while in 1.16–1.17 each rolled independently and some regions get neither.
+
+- [x] **Assert the partition, not just the absence of overlap.** "No region holds both" is nearly
+      vacuous: a wrongly small region size satisfies it trivially, since two structures never
+      share a block. Counting how many interior regions hold exactly one is what bites — the
+      halved and doubled region sizes each fail it. Count only regions **fully inside** the scan
+      box, or edge clipping reads as an empty region.
+- [x] The 1.16–1.17 "some regions hold neither" assertion earns its place separately: a
+      version-blind engine answering from 1.21.3 for everything passes the partition check and
+      fails this one.
+
+- [ ] Check against Chunkbase. The Nether pair is the sharp test — 1.18 swapped which structure
+      each region gets, so a single coordinate changes *type*:
+      | coordinate | 1.16 – 1.17 | 1.18+ |
+      |---|---|---|
+      | (192, 0) | fortress | bastion |
+      | (112, 528) | bastion | fortress |
+      | (336, -128) | fortress | fortress |
+      | (-256, -432) | bastion | bastion |
+      A version-blind tool cannot produce a type swap, and one that merely shifted positions
+      would break the two controls. Also worth a baseline pass on 1.21.3, since nothing in the
+      Nether has ever been checked.
+      For End gateways, one coordinate per unverified regime: (-1501, 311) on 1.13,
+      (-1085, -403) on 1.16, (-1200, -132) on 1.17.
 
 ## 12.6 — Structure coverage beyond the verified four
 
