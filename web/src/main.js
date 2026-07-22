@@ -8,6 +8,7 @@ import { create3D } from './map3d.js';
 import { setupEnchant } from './enchant-ui.js';
 import { setupPortal } from './portal-ui.js';
 import { createStructures, STRUCTURE_TYPES, DIMENSIONS } from './structures.js';
+import { buildVersions } from './versions.js';
 
 const $ = (id) => document.getElementById(id);
 const setStatus = (msg, cls = '') => { const s = $('status'); s.textContent = msg; s.className = cls; };
@@ -22,26 +23,20 @@ try {
 
 // --- version registry (Part 13) ---
 //
-// Derived from the engine, never hardcoded: StructureType and the version enum are both
-// positional, so a list written out here would rot silently the next time the Cubiomes
-// submodule moves. The floor is 13.0's agreed scope (1.8.9, which is exactly the MC_1_8_9
-// entry); the ceiling is whatever this build knows.
+// Built in versions.js, entirely from the engine — see there for why the labels need fixing up.
+// The floor is 13.0's agreed scope (1.8.9, exactly the MC_1_8_9 entry); the ceiling is whatever
+// this build knows.
 //
 // Per-tool, not global (13.1): the map offers all of these, while the enchant calculator is
 // pinned to the single version its data tables encode. Presenting one selector for both would
 // claim a parity that does not exist.
 const MAP_DEFAULT_VERSION = '1.21.3';
-const VERSIONS = [];
-{
-  const floor = engine.str2mc('1.8.9');
-  const newest = engine.mcNewest();
-  if (floor <= 0) { setStatus('engine does not know 1.8.9 — cannot build a version list', 'err'); throw new Error(); }
-  for (let v = floor; v <= newest; v++) {
-    const label = engine.mc2str(v);
-    // Round-trip guard: only offer a version whose own label parses back to it, so a selector
-    // entry can never resolve to a different world than the one it names.
-    if (label && engine.str2mc(label) === v) VERSIONS.push({ id: v, label });
-  }
+let VERSIONS;
+try {
+  VERSIONS = buildVersions(engine);
+} catch (e) {
+  setStatus(`${e.message} — cannot build a version list`, 'err');
+  throw e;
 }
 mcVersion = engine.str2mc(MAP_DEFAULT_VERSION);
 if (mcVersion < 0) { setStatus(`engine does not know version ${MAP_DEFAULT_VERSION}`, 'err'); throw new Error(); }
@@ -59,10 +54,18 @@ const map3d = create3D({ canvas: $('view3d'), engine, View, palette, mcVersion, 
 // Dimension (Part 14). The 2D map generates all three; the 3D view cannot, because Cubiomes'
 // mapApproxHeight has no height model outside the Overworld and gen_heights returns -1 there.
 $('dim').innerHTML = DIMENSIONS.map((d) => `<option value="${d.id}">${d.label}</option>`).join('');
+// Labels are the precise top of each entry; the range it covers goes in the hint, because one
+// entry serves a span of releases and "1.16.5" alone does not tell a 1.16.3 player it is theirs.
 $('ver').innerHTML = VERSIONS.map((v) =>
-  `<option value="${v.id}"${v.id === mcVersion ? ' selected' : ''}>${v.label}</option>`).join('');
+  `<option value="${v.id}"${v.id === mcVersion ? ' selected' : ''} title="covers ${v.covers}">${v.label}</option>`).join('');
+const showCovers = () => {
+  const v = VERSIONS.find((x) => x.id === mcVersion);
+  $('ver-covers').textContent = v && v.covers !== v.label ? ` Selected: covers ${v.covers}.` : '';
+};
+showCovers();
 $('ver').addEventListener('change', () => {
   mcVersion = +$('ver').value | 0;
+  showCovers();
   // Structure availability is version-dependent (1.8 knows 8 types, 1.21.3 knows 24), and the
   // engine is the authority on that — but it can only answer for a world already loaded, so
   // the list is rebuilt after the reload rather than before.

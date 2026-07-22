@@ -1094,16 +1094,30 @@ Nearly free; do it first to prove the registry and the selector UI.
       Minecraft means updating the Cubiomes vendor, which is a dependency bump with its own
       re-verification pass (Part 8 against Chunkbase, pinned to the new version) — not a registry
       entry. Cap the offered list at what the build actually contains.
+- [x] **Landmine — Cubiomes' version labels understate what each entry covers, and the list
+      looks mis-sorted as a result.** `mc2str` names each entry after the family it *starts*, not
+      the release it tops out at: the entry spanning 1.16.2–1.16.5 is `MC_1_16_5`, but its label
+      is "1.16" (the header aliases `MC_1_16 = MC_1_16_5`). Rendered literally, the selector shows
+      `… 1.16.1, 1.16, … 1.19.2, 1.19, … 1.21.1, 1.21.3, 1.21 WD`, which reads as though the
+      point releases were sorted before their majors by mistake.
+      They weren't — the enum is in release order and 1.16.1 genuinely predates 1.16.5.
+      **Do not re-sort to fix the appearance**; that puts 1.16.1 after 1.16.5 and inverts the
+      chronology. Relabel instead: probe `str2mc` for the highest patch string that maps back to
+      the same entry (cubiomes accepts both spellings, so this is derivable rather than a table
+      that rots on the next submodule bump), and the list reads monotonically with no sort at
+      all. Show the covered span too — "1.16.5" alone does not tell someone running 1.16.3 that
+      it is their entry, which is the actual user-facing cost of the understated labels.
+      Keep the round-trip guard on the *displayed* label, not the one `mc2str` returned.
 - [x] Re-run a handful of Part 8 Chunkbase spot-checks **per offered version**, not once. Biome
       generation changed substantially across versions (1.18 in particular); a check that passes
       on 1.21.3 says nothing about 1.16.
-      **Checked on 1.8 and 1.18 (seed 1): both biome maps match Chunkbase.** Those two were the
-      right pair to spend the effort on, because they sit on opposite sides of the 1.18 overhaul —
-      the one change in this range large enough to have broken a whole era on its own. That the
-      floor and the first post-overhaul version both render correctly means the selector is
-      feeding the generator the version it names, in both noise systems. It does **not** cover
-      the smaller inter-version changes, so the remaining 15 stay unverified rather than assumed
-      good; see the UI note in `index.html`, which lists exactly what has been checked.
+      **Done: all 18 offered versions checked against Chunkbase on seed 1, all matching.** The
+      smoke test pins the origin biome per version as the witness for each, and asserts the
+      1.17/1.18 split separately — because 18 per-version witnesses prove nothing if they cannot
+      disagree. Were `set_world` to ignore its version argument, every one of them would still
+      pass as a single uniform block; the boundary assertion is what makes the set meaningful.
+      **Biomes only.** Structures are still verified on 1.21.3 alone, and region salts and
+      viability rules are version-parameterised too, so biome agreement says nothing about them.
 
 ### Status: the map ships, the calculator does not
 
@@ -1113,16 +1127,23 @@ here: `structure_supported` answers for the loaded version *and* dimension, so p
 appear from 1.14, ancient cities from 1.19, trail ruins from 1.20 and trial chambers from 1.21,
 with no per-type version list in the UI. Selecting a version demonstrably changes generation:
 seed 1's origin biome is `ocean` up to 1.17 and `deep_ocean` from 1.18, the overhaul Part 7 was
-bitten by. Both of those are now confirmed against Chunkbase, not merely observed.
+bitten by. **All 18 versions have been confirmed against Chunkbase on seed 1**, so the biome
+side of the map is verified across its whole offered range rather than at one pinned version.
+Structures remain checked on 1.21.3 only.
 
-That confirmation also **settles an open question from Part 8**. The origin biome for seed 1 was
-recorded early on as "ocean" from a Chunkbase check, while the engine said `deep_ocean`; the
-smoke test pinned it as a regression rather than ground truth because the discrepancy could not
-be explained. It can now: `ocean` is exactly what pre-1.18 generation produces there. The
-original note was most likely taken from a pre-1.18 Chunkbase view and later attributed to
-1.21.3. Worth noting what this is *not* — 1.21.3's own origin biome still has no direct external
-check, so that assertion stays a regression. A neighbouring version agreeing is an explanation,
-not a substitute for looking.
+That sweep also **settles the oldest open question in this file**. Seed 1's origin biome was
+recorded back in Part 8 as "ocean" from a Chunkbase check, while the engine insisted on
+`deep_ocean`; the smoke test pinned it as a regression rather than ground truth because the
+discrepancy had no explanation. It has one now: `ocean` is exactly what pre-1.18 generation
+produces there, and 1.21.3 has since been checked directly. The original note was read off a
+pre-1.18 view and later attributed to 1.21.3 — both observations were right, and only the
+version attached to one of them was wrong.
+
+The lesson generalises past this one cell. A biome label is meaningless without the version it
+was read at, and an external source that silently defaults to a different version will produce
+disagreements that look like bugs. Leaving it as a regression for months was the right call: it
+preserved the contradiction intact until there was enough information to resolve it, instead of
+burying it under a plausible guess.
 
 **13.3 is deliberately NOT implemented.** It is not blocked on code — the shape below is clear
 enough — but on *data*: each version needs its enchantment tables transcribed, under 10.2's

@@ -25,6 +25,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createStructures, STRUCTURE_TYPES } from '../web/src/structures.js';
+import { buildVersions } from '../web/src/versions.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const PUB = path.join(ROOT, 'web/public');
@@ -84,19 +85,19 @@ check('ground', 'set_world accepts a BigInt seed (i64 ABI intact)', rc, 0);
 
 // Surface biome at the origin for seed 1.
 //
-// Marked REGRESSION, not ground truth, deliberately. This point was checked against Chunkbase
-// early on and recorded as "ocean", but the engine says `deep_ocean` consistently — at the
-// surface, at get_biome_at(1, 0,64,0), and at scale 4.
+// This one was a regression for a long time, and the story is worth keeping. It was checked
+// against Chunkbase early on and recorded as "ocean", while the engine said `deep_ocean`
+// consistently — at the surface, at get_biome_at(1, 0,64,0), and at scale 4. Neither could be
+// dismissed, so it was pinned as observed behaviour rather than promoted on a hunch.
 //
-// The Part 13 version work explains the discrepancy: this seed's origin biome IS `ocean` in
-// every version up to 1.17 and `deep_ocean` from 1.18 (both now confirmed against Chunkbase —
-// see the version section below). The early note was almost certainly read off a pre-1.18 view.
-// That resolves the contradiction, but it does not verify THIS assertion, which is 1.21.3: a
-// neighbouring version agreeing is an explanation, not an observation. Stays a regression until
-// someone reads the label off Chunkbase on 1.21.3 itself.
+// The Part 13 version sweep resolved it. This seed's origin biome IS `ocean` in every version
+// up to 1.17 and `deep_ocean` from 1.18, and all 18 versions have now been confirmed against
+// Chunkbase — 1.21.3 included. So the original note was read off a pre-1.18 view and later
+// attributed to 1.21.3. Both observations were correct; only the version attached to one of
+// them was wrong. Now ground truth.
 const yPtr = M._malloc(4), idPtr = M._malloc(4);
 eng.genH(0, 0, 1, 1, yPtr, idPtr);
-check('regression', 'seed 1 surface biome at (0,0)', eng.b2s(mc, M.HEAP32[idPtr >> 2]), 'deep_ocean');
+check('ground', 'seed 1 surface biome at (0,0)', eng.b2s(mc, M.HEAP32[idPtr >> 2]), 'deep_ocean');
 M._free(yPtr); M._free(idPtr);
 
 // Structures, all confirmed against Chunkbase on seed 1 / 1.21.3.
@@ -212,18 +213,54 @@ console.log('\nversions');
 const floor = eng.str2mc('1.8.9');
 const newest = eng.mcNewest();
 check('ground', '1.8.9 resolves (the agreed scope floor)', floor > 0, true);
-// Every offered version's own label must parse back to it, or a selector entry could load a
-// different world than the one it names.
-const versions = [];
-for (let v = floor; v <= newest; v++) {
-  const label = eng.mc2str(v);
-  if (label && eng.str2mc(label) === v) versions.push([v, label]);
-}
-check('ground', 'all versions in range round-trip through their labels',
-  versions.length, newest - floor + 1);
-check('regression', 'offered version count', versions.length, 18);
+
+const registry = buildVersions(eng);
+check('ground', 'every version in range is offered', registry.length, newest - floor + 1);
+check('regression', 'offered version count', registry.length, 18);
+// Every offered label must parse back to its own entry, or a selector option could load a
+// different world than the one it names. This must hold for the label actually DISPLAYED, which
+// is no longer the one mc2str returns.
+check('ground', 'all offered labels round-trip through str2mc',
+  registry.filter((v) => eng.str2mc(v.label) !== v.id), []);
 // A version outside the enum must not silently resolve to something plausible.
 check('ground', 'an unknown version string does not resolve', eng.str2mc('26.2'), 0);
+
+// Labels name the newest release each entry covers, so the list reads in release order without
+// being sorted. Cubiomes' own labels do not: it calls the 1.16.2–1.16.5 entry "1.16", which
+// looks misplaced after "1.16.1" even though the enum order is right and 1.16.1 really is older.
+// Pinned in full because these are facts about Minecraft's release history — if a submodule bump
+// changes them, that needs looking at rather than re-recording.
+check('ground', 'labels are the precise top of each entry, in release order',
+  registry.map((v) => v.label),
+  ['1.8.9', '1.9.4', '1.10.2', '1.11.2', '1.12.2', '1.13.2', '1.14.4', '1.15.2', '1.16.1',
+   '1.16.5', '1.17.1', '1.18.2', '1.19.2', '1.19.4', '1.20.6', '1.21.1', '1.21.3', '1.21 WD']);
+// The property behind that list, checked independently of it: strictly increasing as version
+// tuples. The unreleased Winter Drop has no number, so it is only allowed to be last.
+const tuple = (s) => /^\d+(\.\d+)*$/.test(s) ? s.split('.').map(Number) : null;
+const ordered = registry.map((v) => tuple(v.label));
+check('ground', 'only the final entry may be a non-numeric release',
+  ordered.findIndex((t) => t === null), ordered.length - 1);
+const cmp = (a, b) => {
+  for (let i = 0; i < Math.max(a.length, b.length); i++) {
+    const d = (a[i] ?? 0) - (b[i] ?? 0);
+    if (d) return d;
+  }
+  return 0;
+};
+// Filter the non-numeric entries rather than assuming they are last — the check above owns
+// that, and this one should fail rather than throw if they ever aren't.
+check('ground', 'numeric labels strictly increase',
+  ordered.filter(Boolean).filter((t, i, a) => i > 0 && cmp(a[i - 1], t) >= 0), []);
+// The span each entry serves must be contiguous with the one before it, so that every real
+// release maps to exactly one option and none falls in a gap.
+check('ground', 'covered ranges are contiguous and complete',
+  registry.map((v) => v.covers),
+  ['1.8 – 1.8.9', '1.9 – 1.9.4', '1.10 – 1.10.2', '1.11 – 1.11.2', '1.12 – 1.12.2',
+   '1.13 – 1.13.2', '1.14 – 1.14.4', '1.15 – 1.15.2', '1.16 – 1.16.1', '1.16.2 – 1.16.5',
+   '1.17 – 1.17.1', '1.18 – 1.18.2', '1.19 – 1.19.2', '1.19.3 – 1.19.4', '1.20 – 1.20.6',
+   '1.21 – 1.21.1', '1.21.2 – 1.21.3', '1.21 WD']);
+
+const versions = registry.map((v) => [v.id, v.label]);
 
 // Structure availability is version-dependent, and this is what the UI filters on.
 const supAt = (ver, name) => {
@@ -240,12 +277,14 @@ check('ground', 'villages present in every offered version',
 // Selecting a version must actually change generation, not just a label. Seed 1's origin biome
 // moved with the 1.18 overhaul, which is the cheapest observable proof of that.
 //
-// Ground truth: the biome maps for 1.8 (the scope floor) and 1.18 (the first version after the
-// overhaul) were both compared against Chunkbase on seed 1 and matched. The origin cell is the
-// pinned witness for each, since it is the centre of any view compared. Those two versions
-// bracket the only change in this range big enough to invalidate an entire era, so they are the
-// pair worth pinning — but the other 16 remain unverified, and a passing check here says
-// nothing about, say, 1.16.
+// Ground truth: the biome map for seed 1 was compared against Chunkbase on EVERY offered
+// version and matched throughout. The origin cell is the pinned witness for each, since it is
+// the centre of any view compared. The split below is therefore an observed fact about the two
+// generators, not a guess: `ocean` through 1.17, `deep_ocean` from 1.18.
+//
+// What this still does not cover is structures, which were only ever checked on 1.21.3. Region
+// salts and viability rules are version-parameterised too, and biomes agreeing says nothing
+// about them.
 const biomeAt = (ver) => {
   eng.setWorld(BigInt.asUintN(64, 1n), ver, 0);
   const n = M.cwrap('biome_buffer_size', 'number', Array(4).fill('number'))(4, 4, 1, 4);
@@ -255,11 +294,15 @@ const biomeAt = (ver) => {
   M._free(p);
   return b;
 };
-check('ground', 'seed 1 origin biome in 1.8', biomeAt(eng.str2mc('1.8')), 'ocean');
-check('ground', 'seed 1 origin biome in 1.18', biomeAt(eng.str2mc('1.18')), 'deep_ocean');
-// 1.17 is unchecked externally, but it must agree with 1.8: the overhaul lands in 1.18, so the
-// whole pre-1.18 era shares one answer. This is what would catch the boundary drifting.
-check('regression', 'seed 1 origin biome in 1.17', biomeAt(eng.str2mc('1.17')), 'ocean');
+const cut = eng.str2mc('1.18');
+check('ground', 'seed 1 origin biome, every offered version',
+  registry.map((v) => [v.label, biomeAt(v.id)]),
+  registry.map((v) => [v.label, v.id < cut ? 'ocean' : 'deep_ocean']));
+// Per-version witnesses are only worth having if they can disagree. If set_world ignored its
+// version argument every entry above would still pass as one uniform block, so assert the split
+// itself: the two eras must differ, and the boundary must sit exactly at 1.18.
+check('ground', 'the 1.18 overhaul is visible at the boundary',
+  [biomeAt(eng.str2mc('1.17')), biomeAt(cut)], ['ocean', 'deep_ocean']);
 
 eng.setWorld(BigInt.asUintN(64, 1n), mc, 0); // restore for what follows
 
