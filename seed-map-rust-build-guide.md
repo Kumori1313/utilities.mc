@@ -1348,7 +1348,53 @@ load-bearing, re-derive it from the code rather than from memory of the code.
 - [ ] **Still open: structures are verified on 1.21.3 only.** Region sizes, salts and viability
       rules are all version-parameterised, so 22 of the 23 offered versions have structure output
       that nothing has checked. Biome agreement says nothing about it. This is now the largest
-      unverified surface in the project.
+      unverified surface in the project. 13.8 starts on it.
+
+## 13.8 — Structures across versions, starting at the 1.14 outpost boundary
+
+Same method as the sulfur column: find where versions can disagree, then check there. Sweeping
+every type at every version wastes effort on regions where nothing changes.
+
+**Finding the boundaries.** For each type, take the nearest few from the origin at every offered
+version and record only the versions where the answer changes. On seed 1 the result is that
+almost every Overworld type has its output rewritten at **1.18** — unsurprising once stated,
+since `isViableStructurePos` is a biome check and 1.18 replaced biome generation wholesale.
+Outposts specifically have four regimes: absent through 1.13, then distinct sets appearing at
+1.14, 1.15, 1.16, and 1.18. The nearest three happen to be stable across 1.14–1.17; the regime
+changes in between are further out.
+
+- [x] **Landmine, hit while writing the probe — the structure cache is per world, not per call.**
+      `createStructures` caches results, and `S.setWorld()` is what clears it. A sweep that
+      changes version with `engine.setWorld` but never clears that cache reports the *first*
+      version's answer for every subsequent one, and the output looks perfectly plausible: a
+      clean table showing that structures never change across versions. That is exactly the
+      conclusion the first run produced, and it is wrong.
+      The application does not have this bug — a version change runs `submit()` → `loadWorld` →
+      `map2d.setWorld` → `structures.setWorld()` — but it is worth knowing that the *analysis*
+      tooling shares the trap, and that a wrong answer here is a quiet one. The smoke test now
+      fails in three places if the clear is removed.
+
+**What is asserted, and at which tier.** Positions are REGRESSION — none has been checked
+externally yet. What is ground truth is the shape:
+
+- Outpost availability is a clean step at 1.14 across all 23 versions, not just at the one
+  boundary pair. A salt or config change that made them resolve early would slip past a
+  two-sided check.
+- The 1.14 and 1.18 eras must genuinely differ, since 1.18 rebuilt the biomes their viability
+  check reads. Agreement would mean the version never reached the viability test.
+- The eras must nonetheless **share** at least one position. Full disjointness cannot distinguish
+  "same generator, different rules" from "two unrelated random streams"; a survivor can.
+  (1888, -3504) is an outpost in every version from 1.14 on.
+
+- [ ] Check these against Chunkbase. The sharp ones are coordinates that *flip*:
+      | coordinate | 1.14–1.17 | 1.18+ |
+      |---|---|---|
+      | (80, 320) | outpost (plains) | none (ocean) |
+      | (-1904, -1328) | none (forest) | outpost (snowy plains) |
+      | (1888, -3504) | outpost | outpost |
+      Plus the negative case: **1.13 should show no outposts at all, anywhere.**
+- [ ] Then repeat for one pre-1.18 type that is not gated on 1.14 — village or desert pyramid —
+      to separate "outposts are right" from "1.18 is handled right".
 
 ## 12.6 — Structure coverage beyond the verified four
 

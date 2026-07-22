@@ -322,6 +322,52 @@ check('ground', 'pillager outposts absent in 1.13', supAt(eng.str2mc('1.13'), 'o
 check('ground', 'pillager outposts present in 1.14', supAt(eng.str2mc('1.14'), 'outpost'), true);
 check('ground', 'villages present in every offered version',
   versions.filter(([v]) => !supAt(v, 'village')), []);
+// Availability is a step function, so assert the whole shape rather than the two sides of one
+// boundary. A salt or config change that made outposts resolve early would pass the pair above.
+check('ground', 'outposts are available from 1.14 onward and never before',
+  registry.map((v) => [v.label, supAt(v.id, 'outpost')]),
+  registry.map((v) => [v.label, v.id >= eng.str2mc('1.14')]));
+
+// --- structure positions across the 1.14 outpost boundary ---
+//
+// Structures were verified on 1.21.3 only, which left region sizes, salts and viability rules
+// unchecked on every other version. This is the first crack at that, at the boundary where
+// outposts appear.
+//
+// All REGRESSION for now: none of these positions has been checked against Chunkbase. What is
+// asserted as ground truth below is the *shape* — that availability is a clean step, that the
+// eras genuinely differ, and that they are not merely random — because those are properties of
+// this code rather than claims about Minecraft.
+const outposts = (verLabel, n) => {
+  const v = eng.str2mc(verLabel);
+  eng.setWorld(BigInt.asUintN(64, 1n), v, 0);
+  S.setWorld(); // per-world cache; without this every version reports the first one's answer
+  return S.nearest(0, 0, 'outpost', n).targets.map((t) => [t.x, t.z]);
+};
+const OUT_114 = [[80, 320], [-208, 1104], [608, 1152]];
+const OUT_118 = [[-1904, -1328], [1120, 2176], [-2992, 1712]];
+check('regression', 'nearest outposts in 1.14', outposts('1.14.4', 3), OUT_114);
+check('regression', 'nearest outposts in 1.18', outposts('1.18.2', 3), OUT_118);
+// The 1.14-1.17 era is one regime for the nearest few, so a version-sensitivity bug that
+// snapped everything to one era would have to break this to pass the two checks above.
+check('regression', 'the 1.14 answer holds through 1.17',
+  ['1.15.2', '1.16.1', '1.16.5', '1.17.1'].map((l) => outposts(l, 3)),
+  [OUT_114, OUT_114, OUT_114, OUT_114]);
+check('regression', 'the 1.18 answer holds to the newest version',
+  outposts('26.2', 3), OUT_118);
+
+// Ground truth, because these are structural rather than positional. 1.18 rebuilt terrain and
+// biomes, and outpost viability is a biome check, so the two eras must disagree — if they ever
+// agreed it would mean the version was not reaching the viability test at all.
+const setAt = (l) => new Set(outposts(l, 40).map(String));
+const s114 = setAt('1.14.4'), s118 = setAt('1.18.2');
+check('ground', 'the 1.14 and 1.18 outpost eras genuinely differ',
+  [...s114].filter((p) => s118.has(p)).length < s114.size, true);
+// ...but not entirely. A shared position proves the two eras are the same generator under
+// different rules rather than two unrelated random streams — which a fully disjoint result
+// could not distinguish. (1888, -3504) survives every regime from 1.14 on.
+check('ground', 'the eras still share ground',
+  [...s114].some((p) => s118.has(p)), true);
 
 // Selecting a version must actually change generation, not just a label. Seed 1's origin biome
 // moved with the 1.18 overhaul, which is the cheapest observable proof of that.
