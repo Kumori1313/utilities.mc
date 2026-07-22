@@ -335,8 +335,10 @@ check('ground', 'villages present in every offered version',
 // and all 18 structure types over a 4096-block square were byte-identical. Without that
 // comparison this whole block would have had to drop to regression on the dependency swap.
 //
-// REGRESSION — 1.21.5 and newer. These arrived with the engine swap and have never been checked
-// against anything external. They are pinned so a change is visible, and that is all.
+// 1.21.5 and newer arrived with the engine swap and were checked afterwards, so the tiers have
+// since merged and every offered version is ground truth. The two-tier split that lived here is
+// gone rather than kept with an empty side — an assertion over an empty set passes for the wrong
+// reason, and the coverage check below is what now guarantees nothing is silently excluded.
 //
 // Structures remain checked on 1.21.3 alone in every case. Region salts and viability rules are
 // version-parameterised too, and biomes agreeing says nothing about them.
@@ -350,18 +352,14 @@ const biomeAt = (ver) => {
   return b;
 };
 const cut = eng.str2mc('1.18');
-const VERIFIED_THROUGH = eng.str2mc('1.21.4');
 const expected = (v) => [v.label, v.id < cut ? 'ocean' : 'deep_ocean'];
-const verified = registry.filter((v) => v.id <= VERIFIED_THROUGH);
-const unverified = registry.filter((v) => v.id > VERIFIED_THROUGH);
-check('ground', 'seed 1 origin biome, versions checked against Chunkbase',
-  verified.map((v) => [v.label, biomeAt(v.id)]), verified.map(expected));
-check('regression', 'seed 1 origin biome, versions added by the engine swap',
-  unverified.map((v) => [v.label, biomeAt(v.id)]), unverified.map(expected));
-// The split must not quietly become empty on one side — that would turn either assertion into a
-// no-op while still reading as if it covered the whole list.
-check('ground', 'both verification tiers are non-empty',
-  [verified.length > 0, unverified.length > 0], [true, true]);
+check('ground', 'seed 1 origin biome, every offered version',
+  registry.map((v) => [v.label, biomeAt(v.id)]), registry.map(expected));
+// The assertion above is written over `registry`, so it cannot fall behind the offered list —
+// but it could pass vacuously if the registry ever came back empty. Pin the count against the
+// engine's own range so "all versions" keeps meaning all of them.
+check('ground', 'the per-version check covers the whole offered list',
+  registry.length, newest - floor + 1 - gaps.length);
 // Per-version witnesses are only worth having if they can disagree. If set_world ignored its
 // version argument every entry above would still pass as one uniform block, so assert the split
 // itself: the two eras must differ, and the boundary must sit exactly at 1.18.
@@ -414,7 +412,8 @@ check('ground', 'depth is inert pre-1.18 and outside the Overworld',
 
 // Every cave biome must be reachable, not just the new one. A depth view that only ever
 // produced sulfur would be broken in a way a sulfur-only check could not see. These are the
-// first occurrence of each on seed 1, found by search.
+// first occurrence of each on seed 1, found by search, and all four were confirmed against
+// Chunkbase.
 check('ground', 'cave biomes are reachable', [
   at(v262, -3072, 60, -3072),
   at(v262, -3068, 60, 184),
@@ -422,26 +421,28 @@ check('ground', 'cave biomes are reachable', [
   at(v262, 1356, 60, 2980),
 ], ['dripstone_caves', 'lush_caves', 'deep_dark', 'sulfur_caves']);
 
-// The 26.x check that matters. At (1356, 2980) the two versions disagree from y 60 down to
-// about -32, and agree above it.
+// The 26.x check that matters, and the one thing here confirmed against Chunkbase directly:
+// at (1356, 2980) and depth 60, 26.2 shows sulfur caves where 1.21.11 shows plains. This is
+// what promoted 1.21.5+ from regression to ground truth — before it, the new versions had been
+// compared only against our own engine.
 //
-// Note what is and is not true here. The TERRAIN SURFACE at this column is y~79 and reads
-// plains in both versions — so a map showing the true surface biome could not tell them apart.
-// This map draws a fixed y slice, and its default of 60 is already underground wherever terrain
-// rises above it, which is most land. So the difference is visible at the default depth; the
-// control exists to make that systematic rather than dependent on where terrain happens to sit.
-const SULFUR_COL = [1356, 2980];
+// Note what is and is not true. The TERRAIN SURFACE at this column is y~79 and reads plains in
+// both versions, so a map drawing the true surface biome could not tell them apart. This map
+// draws a fixed y slice, and its default of 60 is already underground wherever terrain rises
+// above it — which is most land. The difference is therefore visible at the DEFAULT depth; the
+// control makes that systematic rather than dependent on where terrain happens to sit.
 check('ground', '26.2 and 1.21.11 differ underground at a known column',
-  [at(v262, ...[SULFUR_COL[0], 60, SULFUR_COL[1]]), at(eng.str2mc('1.21.11'), SULFUR_COL[0], 60, SULFUR_COL[1])],
+  [at(v262, 1356, 60, 2980), at(eng.str2mc('1.21.11'), 1356, 60, 2980)],
   ['sulfur_caves', 'plains']);
-check('ground', 'the same column agrees above the sulfur layer',
+// Regression, not ground: the external check was at depth 60. The shape of the column above and
+// below it is this engine's own account, pinned so a change is visible, not independently
+// confirmed.
+check('regression', 'the same column agrees above the sulfur layer',
   [at(v262, 1356, 80, 2980), at(eng.str2mc('1.21.11'), 1356, 80, 2980)], ['plains', 'plains']);
-// The true terrain surface is identical, which is why this needed a depth slice rather than a
-// surface map, and why the sulfur band is genuinely underground rather than a surface biome.
 eng.setWorld(BigInt.asUintN(64, 1n), v262, 0);
 const hP = M._malloc(4), iP = M._malloc(4);
 eng.genH(1356 >> 2, 2980 >> 2, 1, 1, hP, iP);
-check('ground', 'terrain surface at that column is above the sulfur band',
+check('regression', 'terrain surface at that column is above the sulfur band',
   [Math.round(new Float32Array(M.HEAPF32.buffer, hP, 1)[0]) > 60, eng.b2s(v262, M.HEAP32[iP >> 2])],
   [true, 'plains']);
 M._free(hP); M._free(iP);

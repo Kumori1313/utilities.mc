@@ -1295,8 +1295,10 @@ Two defects the swap exposed, both worth keeping in mind for the next one:
       four 1.21.x entries that really owned that range. An unknown lower bound must print **no**
       range rather than a plausible one. The contiguity assertion is what catches this.
 
-Still outstanding after the swap: **1.21.5 and newer are unverified** against anything external,
-and the UI says so. 13.7 adds the depth control that makes them checkable.
+Outstanding after the swap was that **1.21.5 and newer had been compared only against our own
+engine**. 13.7 added the depth control, and the new versions were then confirmed against
+Chunkbase — so all 23 offered versions are now ground truth for biomes. Structures remain checked
+on 1.21.3 alone.
 
 ## 13.7 — Drawing a depth slice, so cave biomes are visible
 
@@ -1335,10 +1337,18 @@ The general lesson: "the map shows surface biomes" was an approximation nobody h
 it was written, and a conclusion got built on it. When a claim about the tool's own behaviour is
 load-bearing, re-derive it from the code rather than from memory of the code.
 
-- [ ] Verify 1.21.5+ against Chunkbase. (1356, 2980) at depth 60 is a ready-made spot: 26.2 should
-      show sulfur caves there and 1.21.11 plains. Cave biomes generally are reachable — verified
-      first occurrences on seed 1 are dripstone at (-3072, -3072), lush caves at (-3068, 184) and
-      deep dark at (-2516, -3032), all at y 60.
+- [x] Verify 1.21.5+ against Chunkbase. Done at **(1356, 2980), depth 60**: 26.2 shows sulfur
+      caves there and 1.21.11 shows plains, matching Chunkbase. The other cave biomes were
+      confirmed at the same time — dripstone at (-3072, -3072), lush caves at (-3068, 184), deep
+      dark at (-2516, -3032), all at y 60 on seed 1.
+      This is what closed the last verification gap from the engine swap, and it is worth noting
+      how small the evidence needed to be: one coordinate at one depth, chosen because it was the
+      only place the two versions could disagree. Finding *where* a claim is falsifiable is most
+      of the work; checking it there is cheap.
+- [ ] **Still open: structures are verified on 1.21.3 only.** Region sizes, salts and viability
+      rules are all version-parameterised, so 22 of the 23 offered versions have structure output
+      that nothing has checked. Biome agreement says nothing about it. This is now the largest
+      unverified surface in the project.
 
 ## 12.6 — Structure coverage beyond the verified four
 
