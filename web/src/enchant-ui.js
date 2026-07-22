@@ -70,10 +70,12 @@ export function setupEnchant(root, app) {
       </label>
     </div>
 
-    <table class="slots">
-      <thead><tr><th>slot</th><th>level</th><th>enchantments</th></tr></thead>
-      <tbody id="e-rows"></tbody>
-    </table>
+    <div class="slots-wrap">
+      <table class="slots">
+        <thead><tr><th>slot</th><th>level</th><th>enchantments</th></tr></thead>
+        <tbody id="e-rows"></tbody>
+      </table>
+    </div>
 
     <h3>Anvil planner</h3>
     <p class="sub">Choose an item and the enchantments you want. The cheapest combining order
