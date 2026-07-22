@@ -214,21 +214,59 @@ const floor = eng.str2mc('1.8.9');
 const newest = eng.mcNewest();
 check('ground', '1.8.9 resolves (the agreed scope floor)', floor > 0, true);
 
-const registry = buildVersions(eng);
-check('ground', 'every version in range is offered', registry.length, newest - floor + 1);
-check('regression', 'offered version count', registry.length, 18);
+const { versions: registry, gaps } = buildVersions(eng);
+check('ground', 'offered versions plus gaps account for the whole range',
+  registry.length + gaps.length, newest - floor + 1);
+check('regression', 'offered version count', registry.length, 23);
+
+// One entry in the vendored engine cannot be named in either direction: `mc2str(30)` returns
+// "?" and `str2mc("1.21.6")` returns 0, so the registry cannot offer it — an option must be
+// able to say which version it loads. That is a bug in the vendored fork, not here.
+//
+// Omitting it is harmless, but that is a MEASURED claim, not an assumption: id 30 generates
+// identically to the entries on either side of it, so a player on 1.21.6 gets the same world
+// whichever neighbour they pick. 1.21.6 ("Chase the Skies") had no worldgen changes. If a
+// future bump gives that id its own generation, these checks fail and the gap stops being
+// harmless — which is exactly when we would need to do something about it.
+check('regression', 'enum ids the engine cannot name', gaps, [30]);
+const cells = (ver, y) => {
+  eng.setWorld(BigInt.asUintN(64, 1n), ver, 0);
+  const n = M.cwrap('biome_buffer_size', 'number', Array(4).fill('number'))(4, 48, 1, 48);
+  const p = M._malloc(n * 4);
+  M.cwrap('gen_biomes', 'number', Array(8).fill('number'))(4, -96, y, -96, 48, 1, 48, p);
+  const out = Array.from(new Int32Array(M.HEAP32.buffer, p, 48 * 48));
+  M._free(p);
+  return out;
+};
+for (const y of [15, -4]) {
+  const gap = cells(30, y), lo = cells(29, y), hi = cells(31, y);
+  check('ground', `unnameable id 30 matches its neighbours (y=${y})`,
+    [gap.filter((x, i) => x !== lo[i]).length, gap.filter((x, i) => x !== hi[i]).length], [0, 0]);
+}
 // Every offered entry must carry a string that parses back to it, or an option could resolve to
 // a different world than the one it names. That guard lives on `key` — the engine's own
 // spelling — because one displayed label is deliberately not the engine's.
 check('ground', 'every entry round-trips through str2mc on its key',
   registry.filter((v) => eng.str2mc(v.key) !== v.id), []);
-// The display override is meant to be a single documented exception, not a habit. Anything else
-// drifting away from the engine's spelling should show up here.
-check('ground', 'exactly one label differs from the engine spelling',
-  registry.filter((v) => v.label !== v.key).map((v) => [v.key, v.label]),
-  [['1.21 WD', '1.21.4']]);
+// No label should currently diverge from the engine's own spelling. The Winter Drop override
+// that used to live here went inert when the vendored engine started returning "1.21.4"
+// directly. Anything reappearing must be a deliberate, documented placeholder.
+check('ground', 'no label diverges from the engine spelling',
+  registry.filter((v) => v.label !== v.key).map((v) => [v.key, v.label]), []);
 // A version outside the enum must not silently resolve to something plausible.
-check('ground', 'an unknown version string does not resolve', eng.str2mc('26.2'), 0);
+//
+// This originally used "26.2" as a stand-in for an obviously-fake version. It is now a real
+// Minecraft release — the 1.21 line ended at 1.21.11 and versioning moved to a 26.x scheme —
+// which is a good reminder that "no such version" and "a version we do not support" are
+// different claims, and only the second one is ours to make. Use a string that cannot ever be
+// a version, and assert the ceiling separately and honestly below.
+check('ground', 'a malformed version string does not resolve', eng.str2mc('not-a-version'), 0);
+// The ceiling is a property of the vendored engine, not of Minecraft. Pinned so that a
+// submodule bump has to come here and state its new range deliberately.
+check('regression', 'newest version this build supports',
+  eng.mc2str(eng.mcNewest()), '26.2');
+check('ground', 'versions past the vendored ceiling do not resolve',
+  ['26.3', '27.1'].filter((s) => eng.str2mc(s) !== 0), []);
 
 // Labels name the newest release each entry covers, so the list reads in release order without
 // being sorted. Cubiomes' own labels do not: it calls the 1.16.2–1.16.5 entry "1.16", which
@@ -238,7 +276,8 @@ check('ground', 'an unknown version string does not resolve', eng.str2mc('26.2')
 check('ground', 'labels are the precise top of each entry, in release order',
   registry.map((v) => v.label),
   ['1.8.9', '1.9.4', '1.10.2', '1.11.2', '1.12.2', '1.13.2', '1.14.4', '1.15.2', '1.16.1',
-   '1.16.5', '1.17.1', '1.18.2', '1.19.2', '1.19.4', '1.20.6', '1.21.1', '1.21.3', '1.21.4']);
+   '1.16.5', '1.17.1', '1.18.2', '1.19.2', '1.19.4', '1.20.6', '1.21.1', '1.21.3', '1.21.4',
+   '1.21.5', '1.21.9', '1.21.11', '26.1', '26.2']);
 // The property behind that list, checked independently of it: strictly increasing as version
 // tuples. Every label is numeric now that the Winter Drop placeholder is resolved, but the
 // check does not assume that — a future TBA entry is allowed, provided it sorts last.
@@ -264,7 +303,10 @@ check('ground', 'covered ranges are contiguous and complete',
   ['1.8 – 1.8.9', '1.9 – 1.9.4', '1.10 – 1.10.2', '1.11 – 1.11.2', '1.12 – 1.12.2',
    '1.13 – 1.13.2', '1.14 – 1.14.4', '1.15 – 1.15.2', '1.16 – 1.16.1', '1.16.2 – 1.16.5',
    '1.17 – 1.17.1', '1.18 – 1.18.2', '1.19 – 1.19.2', '1.19.3 – 1.19.4', '1.20 – 1.20.6',
-   '1.21 – 1.21.1', '1.21.2 – 1.21.3', '1.21.4']);
+   '1.21 – 1.21.1', '1.21.2 – 1.21.3', '1.21.4', '1.21.5',
+   // No lower bound after the 1.21.6 gap — claiming one here would swallow the four 1.21.x
+   // entries above it. This is the assertion that would have caught "1.21 – 1.21.9".
+   '1.21.9', '1.21.10 – 1.21.11', '26.1', '26.2']);
 
 const versions = registry.map((v) => [v.id, v.label]);
 
@@ -283,18 +325,20 @@ check('ground', 'villages present in every offered version',
 // Selecting a version must actually change generation, not just a label. Seed 1's origin biome
 // moved with the 1.18 overhaul, which is the cheapest observable proof of that.
 //
-// Ground truth: the biome map for seed 1 was compared against Chunkbase on EVERY offered
-// version and matched throughout. The origin cell is the pinned witness for each, since it is
-// the centre of any view compared. The split below is therefore an observed fact about the two
-// generators, not a guess: `ocean` through 1.17, `deep_ocean` from 1.18.
+// The verification status of these entries is NOT uniform, so they are split accordingly.
 //
-// The newest entry was compared against Chunkbase's **1.21.4** specifically. That matters twice:
-// it is what identifies Cubiomes' "1.21 WD" placeholder as the released Winter Drop, and it is
-// the only evidence that the snapshot-derived (24w40a) biome tree still matches what shipped.
+// GROUND TRUTH — 1.8 through 1.21.4. Each was compared against Chunkbase on seed 1 and matched,
+// the newest against Chunkbase's 1.21.4 specifically. That checking was done against the
+// PREVIOUS engine (Cubitect e61f905), and it carries over only because the two engines were
+// compared directly across every shared version: surface biomes, terrain heights, Nether, End
+// and all 18 structure types over a 4096-block square were byte-identical. Without that
+// comparison this whole block would have had to drop to regression on the dependency swap.
 //
-// What this still does not cover is structures, which were only ever checked on 1.21.3. Region
-// salts and viability rules are version-parameterised too, and biomes agreeing says nothing
-// about them.
+// REGRESSION — 1.21.5 and newer. These arrived with the engine swap and have never been checked
+// against anything external. They are pinned so a change is visible, and that is all.
+//
+// Structures remain checked on 1.21.3 alone in every case. Region salts and viability rules are
+// version-parameterised too, and biomes agreeing says nothing about them.
 const biomeAt = (ver) => {
   eng.setWorld(BigInt.asUintN(64, 1n), ver, 0);
   const n = M.cwrap('biome_buffer_size', 'number', Array(4).fill('number'))(4, 4, 1, 4);
@@ -305,9 +349,18 @@ const biomeAt = (ver) => {
   return b;
 };
 const cut = eng.str2mc('1.18');
-check('ground', 'seed 1 origin biome, every offered version',
-  registry.map((v) => [v.label, biomeAt(v.id)]),
-  registry.map((v) => [v.label, v.id < cut ? 'ocean' : 'deep_ocean']));
+const VERIFIED_THROUGH = eng.str2mc('1.21.4');
+const expected = (v) => [v.label, v.id < cut ? 'ocean' : 'deep_ocean'];
+const verified = registry.filter((v) => v.id <= VERIFIED_THROUGH);
+const unverified = registry.filter((v) => v.id > VERIFIED_THROUGH);
+check('ground', 'seed 1 origin biome, versions checked against Chunkbase',
+  verified.map((v) => [v.label, biomeAt(v.id)]), verified.map(expected));
+check('regression', 'seed 1 origin biome, versions added by the engine swap',
+  unverified.map((v) => [v.label, biomeAt(v.id)]), unverified.map(expected));
+// The split must not quietly become empty on one side — that would turn either assertion into a
+// no-op while still reading as if it covered the whole list.
+check('ground', 'both verification tiers are non-empty',
+  [verified.length > 0, unverified.length > 0], [true, true]);
 // Per-version witnesses are only worth having if they can disagree. If set_world ignored its
 // version argument every entry above would still pass as one uniform block, so assert the split
 // itself: the two eras must differ, and the boundary must sit exactly at 1.18.
