@@ -1433,10 +1433,24 @@ switching at 1.18 and nowhere else — plus one control present in all 23 versio
       the flight test asserting finiteness instead of direction — the assertion was about the
       wrong property, and only mutation testing exposed it.
 
-- [ ] Check the four coordinates above against Chunkbase on one pre-1.18 version and one 1.18+
-      version. Positions are regression until then; what is already ground truth is the shape —
-      that pyramids exist in every version, that presence varies with version rather than only
-      with position, and that the boundary sits at 1.18 exactly.
+- [x] Check the four coordinates above against Chunkbase on one pre-1.18 version and one 1.18+
+      version. **All four match.**
+
+**Be precise about what that buys.** Chunkbase confirmed the *era-level* claim: a pyramid on one
+pre-1.18 version and none on one 1.18+ version, and the reverse. The 23-entry mask asserted in
+the smoke test is that plus **within-era constancy**, which is a property of this code and was
+never externally checked. Both halves are asserted, and neither alone would justify the mask —
+so the constancy half is now its own named assertion rather than being folded invisibly into a
+long array comparison. It reports which version disagrees with its era, so a failure names the
+offender instead of printing two 23-element arrays to diff by eye.
+
+With this, the two claims that were entangled are separated: outposts cover the introduction
+gate at 1.14, pyramids cover version-dependent viability at 1.18 for a type present throughout.
+
+- [ ] **Remaining structure gaps**, in rough order of value: the other 21 types are still checked
+      on 1.21.3 alone; the pre-1.18 boundaries (1.9, 1.16) have no verified coordinate at all,
+      and the footprint screen is uncalibrated there, so finding one needs a different method;
+      and the Nether and End have no per-version structure check whatsoever.
 
 ## 12.6 — Structure coverage beyond the verified four
 

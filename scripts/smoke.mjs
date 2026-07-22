@@ -399,8 +399,11 @@ check('ground', 'Chunkbase-checked outpost that survives every version',
 // Desert pyramids have existed since 1.3, so their behaviour at the 1.18 boundary tests the
 // version-dependent viability alone.
 //
-// REGRESSION until checked against Chunkbase. The era *shape* below is ground truth, since a
-// position flipping cleanly at exactly one boundary is a property of this code.
+// GROUND TRUTH, with the derivation stated because the external evidence is narrower than the
+// assertion. What Chunkbase confirmed is the ERA-LEVEL claim at each coordinate — a pyramid on
+// one pre-1.18 version and none on one 1.18+ version, and vice versa. The full 23-entry mask
+// follows from that plus within-era constancy, which is asserted separately below and is a
+// property of this code rather than of Minecraft. Neither half alone would justify the mask.
 const hasPyramid = (verId, x, z) => {
   eng.setWorld(BigInt.asUintN(64, 1n), verId, 0);
   const cap = 64;
@@ -423,14 +426,32 @@ check('ground', 'desert pyramids exist in every offered version',
 // Each of these is present across exactly one era and absent across the other, with the switch
 // at 1.18 and nowhere else. Asserted against the era mask rather than a literal array so it
 // stays meaningful if the offered list grows.
-check('regression', 'a pyramid confined to the pre-1.18 era', era(2624, 2816), PRE);
-check('regression', 'another confined to the pre-1.18 era', era(-1760, 3936), PRE);
-check('regression', 'a pyramid confined to the 1.18+ era', era(-2848, -10000), POST);
-// The control: present in all 23. Chunkbase already confirms it on 1.21.3 (it is one of the
-// nine positions from the footprint investigation), so this one is ground truth for that
-// version and regression for the rest.
-check('regression', 'a pyramid present in every version',
-  era(768, 10880), registry.map(() => true));
+const PYRAMIDS = [
+  ['confined to the pre-1.18 era', 2624, 2816, PRE],
+  ['also confined to the pre-1.18 era', -1760, 3936, PRE],
+  ['confined to the 1.18+ era', -2848, -10000, POST],
+  // The control, present in all 23. Independently confirmed on 1.21.3 as well, since it is one
+  // of the nine positions from the footprint investigation.
+  ['present in every version', 768, 10880, registry.map(() => true)],
+];
+for (const [label, x, z, want] of PYRAMIDS) {
+  check('ground', `a pyramid ${label}`, era(x, z), want);
+}
+// Within-era constancy, stated on its own. The masks above would still pass if a single
+// mid-era version diverged AND the expectation had been recorded from that same run, so this
+// names the property directly: no offered version inside either era may disagree with its
+// neighbours. It is also the half of the mask that Chunkbase did NOT check.
+const eraOf = (i) => (PRE[i] ? 'pre-1.18' : '1.18+');
+// Reports every version that disagrees with the first version of its own era, so a failure
+// names the offender rather than just saying a long array mismatched.
+const eraOutliers = (mask) =>
+  ['pre-1.18', '1.18+'].flatMap((e) => {
+    const idx = mask.map((_, i) => i).filter((i) => eraOf(i) === e);
+    const first = mask[idx[0]];
+    return idx.filter((i) => mask[i] !== first).map((i) => `${registry[i].label} (${e})`);
+  });
+check('ground', 'pyramid presence is constant within each era',
+  PYRAMIDS.flatMap(([label, x, z]) => eraOutliers(era(x, z)).map((v) => `${label}: ${v}`)), []);
 
 // The failure this guards is a tool that ignores the version and answers from one generation
 // for all of them.
