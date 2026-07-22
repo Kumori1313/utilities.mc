@@ -24,10 +24,13 @@
         <button data-mode="2d" class="active">2D</button>
         <button data-mode="3d">3D</button>
       </div>
-      <p class="version">World generation differs between versions, so this map is only
-        correct for the pinned one.</p>
+      <p class="version">World generation differs between versions — pick the one your world
+        uses. Verified against Chunkbase on 1.21.3; other versions are unchecked.</p>
       <label class="fld">seed <input id="seed" value="1" spellcheck="false"></label>
-      <label class="fld">dimension <select id="dim"></select></label>
+      <div class="coords">
+        <label class="fld">version <select id="ver"></select></label>
+        <label class="fld">dimension <select id="dim"></select></label>
+      </div>
       <div class="coords">
         <label class="fld">x <input id="cx" value="0" inputmode="numeric"></label>
         <label class="fld">z <input id="cz" value="0" inputmode="numeric"></label>

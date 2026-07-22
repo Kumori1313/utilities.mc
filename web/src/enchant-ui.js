@@ -61,6 +61,10 @@ export function setupEnchant(root, app) {
     <p class="sub">Predicts enchanting-table results for a given xp seed — Minecraft
       <strong>${app.enchant_version()}</strong>. The xp seed is a per-player value that
       re-rolls whenever you enchant.</p>
+    <p class="sub">This calculator is fixed to ${app.enchant_version()} and does
+      <strong>not</strong> follow the seed map's version selector: its tables are compiled in,
+      and only that one version has been transcribed. Enchantment weights and item sets differ
+      between versions, so results elsewhere would be quietly wrong rather than approximate.</p>
 
     <div class="grid">
       <label>xp seed <input id="e-seed" value="-1234567" spellcheck="false"></label>

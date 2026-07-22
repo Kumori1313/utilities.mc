@@ -81,7 +81,7 @@ const SLIME_MAX_BPP = 4;
 /// Chunk edge in blocks. Slime chunks are a chunk-grid property, not a biome one.
 const CHUNK = 16;
 
-export function create2D({ canvas, engine, palette, mcVersion, ui, structures }) {
+export function create2D({ canvas, engine, palette, mcVersion: initialVersion, ui, structures }) {
   const ctx = canvas.getContext('2d');
   const markerColor = new Map(STRUCTURE_TYPES.map((t) => [t.id, t.color]));
   const markerLabel = new Map(STRUCTURE_TYPES.map((t) => [t.id, t.label.replace(/s$/, '')]));
@@ -89,6 +89,9 @@ export function create2D({ canvas, engine, palette, mcVersion, ui, structures })
   let markers = []; // last drawn markers, with screen positions, for hover
   let nearest = null; // { origin: {x, z}, type, targets: [{x, z, dist}] }
   let dim = 0; // Cubiomes DIM_* — only affects presentation here; generation is set globally
+  // Version must be state, not a captured constructor argument: it is selectable (Part 13),
+  // and a stale value here would label biomes using a different version's table.
+  let mcVersion = initialVersion;
   let showSlime = false, showSpawn = false;
   let spawn = null; // world spawn, resolved once per world (getSpawn runs a real search)
   const slime = document.createElement('canvas'); // chunk-resolution scratch, scaled up crisp
@@ -515,7 +518,7 @@ export function create2D({ canvas, engine, palette, mcVersion, ui, structures })
   }, { passive: false });
 
   return {
-    setWorld(_seedText, x, z, newDim = 0) {
+    setWorld(_seedText, x, z, newDim = 0, newVersion = mcVersion) {
       // Every cached tile was generated under the previous seed/version. Serving one after a
       // world change is a silent wrong-biome bug that looks exactly like correct output, so
       // the cache is dropped wholesale — the same rule the Rust tile cache enforces.
@@ -523,6 +526,7 @@ export function create2D({ canvas, engine, palette, mcVersion, ui, structures })
       structures.setWorld(); // same rule: a structure list from the old world looks correct
       nearest = null; // targets from the previous world would draw just as convincingly
       dim = newDim;
+      mcVersion = newVersion;
       // Resolve spawn once per world: getSpawn runs a search (2-7 ms), not a lookup, so it
       // must not be called per frame. Overworld only — the engine refuses otherwise.
       spawn = null;

@@ -20,8 +20,31 @@ try {
   throw e;
 }
 
-mcVersion = engine.str2mc('1.21.3');
-if (mcVersion < 0) { setStatus('engine does not know version 1.21.3', 'err'); throw new Error(); }
+// --- version registry (Part 13) ---
+//
+// Derived from the engine, never hardcoded: StructureType and the version enum are both
+// positional, so a list written out here would rot silently the next time the Cubiomes
+// submodule moves. The floor is 13.0's agreed scope (1.8.9, which is exactly the MC_1_8_9
+// entry); the ceiling is whatever this build knows.
+//
+// Per-tool, not global (13.1): the map offers all of these, while the enchant calculator is
+// pinned to the single version its data tables encode. Presenting one selector for both would
+// claim a parity that does not exist.
+const MAP_DEFAULT_VERSION = '1.21.3';
+const VERSIONS = [];
+{
+  const floor = engine.str2mc('1.8.9');
+  const newest = engine.mcNewest();
+  if (floor <= 0) { setStatus('engine does not know 1.8.9 — cannot build a version list', 'err'); throw new Error(); }
+  for (let v = floor; v <= newest; v++) {
+    const label = engine.mc2str(v);
+    // Round-trip guard: only offer a version whose own label parses back to it, so a selector
+    // entry can never resolve to a different world than the one it names.
+    if (label && engine.str2mc(label) === v) VERSIONS.push({ id: v, label });
+  }
+}
+mcVersion = engine.str2mc(MAP_DEFAULT_VERSION);
+if (mcVersion < 0) { setStatus(`engine does not know version ${MAP_DEFAULT_VERSION}`, 'err'); throw new Error(); }
 
 // Calculator panels — pure form UIs over the shared `app` module.
 setupEnchant($('view-enchant'), app);
@@ -36,6 +59,16 @@ const map3d = create3D({ canvas: $('view3d'), engine, View, palette, mcVersion, 
 // Dimension (Part 14). The 2D map generates all three; the 3D view cannot, because Cubiomes'
 // mapApproxHeight has no height model outside the Overworld and gen_heights returns -1 there.
 $('dim').innerHTML = DIMENSIONS.map((d) => `<option value="${d.id}">${d.label}</option>`).join('');
+$('ver').innerHTML = VERSIONS.map((v) =>
+  `<option value="${v.id}"${v.id === mcVersion ? ' selected' : ''}>${v.label}</option>`).join('');
+$('ver').addEventListener('change', () => {
+  mcVersion = +$('ver').value | 0;
+  // Structure availability is version-dependent (1.8 knows 8 types, 1.21.3 knows 24), and the
+  // engine is the authority on that — but it can only answer for a world already loaded, so
+  // the list is rebuilt after the reload rather than before.
+  submit();
+  renderStructureList();
+});
 let dim = 0;
 const dimName = () => DIMENSIONS.find((d) => d.id === dim).name;
 
@@ -52,8 +85,8 @@ function loadWorld(seedText, x, z) {
     setStatus(`engine set_world failed (dimension ${dim})`, 'err');
     return;
   }
-  map2d.setWorld(seedText, x, z, dim);
-  map3d.setWorld(seedText, x, z, dim);
+  map2d.setWorld(seedText, x, z, dim, mcVersion);
+  map3d.setWorld(seedText, x, z, dim, mcVersion);
   syncLayers(); // spawn is resolved per world, and the layers are Overworld-only
 }
 
@@ -74,7 +107,10 @@ $('dim').addEventListener('change', () => {
 // Only the current dimension's types are offered: gen_structures refuses a mismatch, so
 // listing the others would give the user a checkbox that finds nothing and says nothing.
 function typesHere() {
-  return STRUCTURE_TYPES.filter((t) => t.dim === dimName());
+  // The engine decides: it knows which version introduced each type and which dimension it
+  // belongs to. Asking it beats keeping a table here that would need updating twice — once per
+  // new type and once per Cubiomes bump.
+  return STRUCTURE_TYPES.filter((t) => engine.structureSupported(t.id) === 1);
 }
 function renderStructureList() {
   const types = typesHere();

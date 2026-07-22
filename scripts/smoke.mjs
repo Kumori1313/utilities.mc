@@ -67,6 +67,9 @@ const eng = {
   genSlimeChunks: M.cwrap('gen_slime_chunks', 'number',
     ['number', 'number', 'number', 'number', 'number']),
   worldSpawn: M.cwrap('world_spawn', 'number', ['number']),
+  mc2str: M.cwrap('mc2str', 'string', ['number']),
+  mcNewest: M.cwrap('mc_newest', 'number', []),
+  structureSupported: M.cwrap('structure_supported', 'number', ['string']),
   M,
 };
 
@@ -199,6 +202,52 @@ const rate = slime / (N * N);
 // return code reveals.
 check('ground', 'slime chunk rate is near 10%', rate > 0.08 && rate < 0.12, true);
 M._free(slPtr);
+
+// --- versions (Part 13) ---
+console.log('\nversions');
+const floor = eng.str2mc('1.8.9');
+const newest = eng.mcNewest();
+check('ground', '1.8.9 resolves (the agreed scope floor)', floor > 0, true);
+// Every offered version's own label must parse back to it, or a selector entry could load a
+// different world than the one it names.
+const versions = [];
+for (let v = floor; v <= newest; v++) {
+  const label = eng.mc2str(v);
+  if (label && eng.str2mc(label) === v) versions.push([v, label]);
+}
+check('ground', 'all versions in range round-trip through their labels',
+  versions.length, newest - floor + 1);
+check('regression', 'offered version count', versions.length, 18);
+// A version outside the enum must not silently resolve to something plausible.
+check('ground', 'an unknown version string does not resolve', eng.str2mc('26.2'), 0);
+
+// Structure availability is version-dependent, and this is what the UI filters on.
+const supAt = (ver, name) => {
+  eng.setWorld(BigInt.asUintN(64, 1n), ver, 0);
+  return eng.structureSupported(name) === 1;
+};
+check('ground', 'trial chambers absent in 1.8', supAt(eng.str2mc('1.8'), 'trial_chambers'), false);
+check('ground', 'trial chambers present in 1.21.3', supAt(eng.str2mc('1.21.3'), 'trial_chambers'), true);
+check('ground', 'pillager outposts absent in 1.13', supAt(eng.str2mc('1.13'), 'outpost'), false);
+check('ground', 'pillager outposts present in 1.14', supAt(eng.str2mc('1.14'), 'outpost'), true);
+check('ground', 'villages present in every offered version',
+  versions.filter(([v]) => !supAt(v, 'village')), []);
+
+// Selecting a version must actually change generation, not just a label. Seed 1's origin biome
+// moved with the 1.18 overhaul, which is the cheapest observable proof of that.
+const biomeAt = (ver) => {
+  eng.setWorld(BigInt.asUintN(64, 1n), ver, 0);
+  const n = M.cwrap('biome_buffer_size', 'number', Array(4).fill('number'))(4, 4, 1, 4);
+  const p = M._malloc(n * 4);
+  M.cwrap('gen_biomes', 'number', Array(8).fill('number'))(4, 0, 15, 0, 4, 1, 4, p);
+  const b = eng.b2s(ver, M.HEAP32[p >> 2]);
+  M._free(p);
+  return b;
+};
+check('regression', 'seed 1 origin biome in 1.17', biomeAt(eng.str2mc('1.17')), 'ocean');
+check('regression', 'seed 1 origin biome in 1.18', biomeAt(eng.str2mc('1.18')), 'deep_ocean');
+
+eng.setWorld(BigInt.asUintN(64, 1n), mc, 0); // restore for what follows
 
 console.log('\ncalculators');
 check('regression', 'enchant table version', app.enchant_version(), MC);

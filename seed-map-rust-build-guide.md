@@ -1053,10 +1053,14 @@ much cheaper to reject it now than to unpick it later.
       The calculator can offer only versions you have transcribed a dataset for — realistically
       a handful. A single global selector claims parity that does not exist, and will either
       hide seed-map versions that work or offer calculator versions that silently fall back.
-- [ ] **Per-tool version selectors, one shared registry.** Keep a single source of truth listing
+- [x] **Per-tool version selectors, one shared registry.** Keep a single source of truth listing
       known versions and, per version, which features support it. Each tool renders its own
       selector from that registry, filtered to what it can actually serve.
-- [ ] **Landmine — version strings are no longer `1.x.y`.** Minecraft's newer releases use a
+- [x] **Landmine — version strings are no longer `1.x.y`.** Handled by treating the version as
+      an opaque engine int and never parsing it: the registry is built by walking the enum from
+      `str2mc("1.8.9")` to `mc_newest()` and asking `mc2str` for each label, with a round-trip
+      guard (`str2mc(mc2str(v)) === v`) so a selector entry can never load a world other than
+      the one it names. `str2mc("26.2")` returns 0, confirming the ceiling. Minecraft's newer releases use a
       date-style scheme (26.1, 26.2, …). Any comparison, sorting, or "is this at least X" check
       written as a `1.MAJOR.MINOR` parse will mis-order these or reject them outright. Treat the
       version as an opaque key into the registry, and store an explicit sort order.
@@ -1068,20 +1072,24 @@ much cheaper to reject it now than to unpick it later.
 
 Nearly free; do it first to prove the registry and the selector UI.
 
-- [ ] Replace the hardcoded `str2mc('1.21.3')` in the frontend with a dropdown bound to the
+- [x] Replace the hardcoded `str2mc('1.21.3')` in the frontend with a dropdown bound to the
       registry. On change, call the engine's `set_world` **and** the Rust `View::set_world`, then
       force a full re-render.
-- [ ] **Landmine — two `set_world`s, and only one of them clears the cache.** The engine shim
+- [x] **Landmine — two `set_world`s, and only one of them clears the cache.** Found a related
+      bug while wiring this: both renderers captured `mcVersion` as a constructor argument, so a
+      version change would have left the 3D view seeding its Rust cache with the *previous*
+      version — serving one version's terrain from a cache that believed it was current. Version
+      is now per-load state, passed through `setWorld` like the dimension. The engine shim
       holds the C `Generator`; the Rust `View` holds the tile cache. Calling only the engine's
       leaves every cached tile generated under the *previous* version, and stale biome tiles look
       exactly like correct output. The cache already keys on `version` — the bug is failing to
       tell it.
-- [ ] **Validate before use.** `set_world` returns -1 outside `MC_B1_7..MC_NEWEST`, and `str2mc`
+- [x] **Validate before use.** `set_world` returns -1 outside `MC_B1_7..MC_NEWEST`, and `str2mc`
       on an unrecognised string does not return a usable version. Check both; do not feed the
       result straight into a generate call. Note that the shim's check is **wider than the 13.0
       scope** — it accepts 1.7.10 and the betas — so it will not catch a below-floor version on
       its own. The registry is what enforces the floor.
-- [ ] **Landmine — you cannot offer a version newer than the vendored Cubiomes knows.**
+- [x] **Landmine — you cannot offer a version newer than the vendored Cubiomes knows.**
       `MC_NEWEST` is a compile-time ceiling from the vendored C source. Supporting a newer
       Minecraft means updating the Cubiomes vendor, which is a dependency bump with its own
       re-verification pass (Part 8 against Chunkbase, pinned to the new version) — not a registry
@@ -1089,6 +1097,24 @@ Nearly free; do it first to prove the registry and the selector UI.
 - [ ] Re-run a handful of Part 8 Chunkbase spot-checks **per offered version**, not once. Biome
       generation changed substantially across versions (1.18 in particular); a check that passes
       on 1.21.3 says nothing about 1.16.
+
+### Status: the map ships, the calculator does not
+
+13.2 is done — 18 versions, 1.8.9 through 1.21 WD, selectable on the seed map. Structure
+availability follows automatically, because the engine is asked rather than a table being kept
+here: `structure_supported` answers for the loaded version *and* dimension, so pillager outposts
+appear from 1.14, ancient cities from 1.19, trail ruins from 1.20 and trial chambers from 1.21,
+with no per-type version list in the UI. Selecting a version demonstrably changes generation:
+seed 1's origin biome is `ocean` up to 1.17 and `deep_ocean` from 1.18, the overhaul Part 7 was
+bitten by.
+
+**13.3 is deliberately NOT implemented.** It is not blocked on code — the shape below is clear
+enough — but on *data*: each version needs its enchantment tables transcribed, under 10.2's
+two-independent-transcriptions rule. Generating those tables from anything other than a real
+source would produce a calculator that is confidently wrong, which is worse than one that is
+honestly limited. The calculator therefore stays pinned to 1.21.3 and says so in its own panel,
+explicitly noting that it does not follow the map's selector. That is 13.1's per-tool rule doing
+its job rather than a gap.
 
 ## 13.3 — Multi-version enchantment data
 

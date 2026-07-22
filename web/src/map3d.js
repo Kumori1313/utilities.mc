@@ -28,7 +28,7 @@ const FLY_KEYS = new Set([
   'Space', 'ShiftLeft', 'ShiftRight',
 ]);
 
-export function create3D({ canvas, engine, View, palette, mcVersion, ui }) {
+export function create3D({ canvas, engine, View, palette, mcVersion: initialVersion, ui }) {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
   renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
 
@@ -54,6 +54,10 @@ export function create3D({ canvas, engine, View, palette, mcVersion, ui }) {
   let lastTile = null; // tile the focus was in at the last re-tile
   let queue = []; // tiles still to mesh, nearest first
   let pending = null; // { seed, x, z } loaded while hidden, applied on first show
+  // Selectable since Part 13, so it cannot stay a captured constructor argument: the Rust
+  // tile cache keys on version, and seeding it with a stale one would serve another
+  // version's terrain from a cache that believes it is current.
+  let mcVersion = initialVersion;
 
   function resize(force = false) {
     const { clientWidth: w, clientHeight: h } = canvas;
@@ -247,8 +251,9 @@ export function create3D({ canvas, engine, View, palette, mcVersion, ui }) {
     // Non-Overworld loads are dropped rather than deferred: gen_heights returns -1 for the
     // Nether and the End, so every tile would fail. Keeping it pending would mean switching
     // back to the Overworld later replayed a load this view can never satisfy.
-    setWorld(seedText, x, z, dim = 0) {
+    setWorld(seedText, x, z, dim = 0, version = mcVersion) {
       if (dim !== 0) { pending = null; return; }
+      mcVersion = version;
       const seed = parseSeed(seedText);
       pending = { seed, x, z };
       if (shown) { apply(seed, x, z); pending = null; }

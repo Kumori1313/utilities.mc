@@ -307,6 +307,32 @@ int gen_structures(int stype, int x0, int z0, int x1, int z1, int *out, int max_
     return n;
 }
 
+// Newest version this build knows, as the enum int. Callers enumerate the offered versions
+// between str2mc("1.8.9") and this, rather than hardcoding a list that would silently rot when
+// the Cubiomes submodule is bumped — the enum is positional.
+EMSCRIPTEN_KEEPALIVE
+int mc_newest(void) {
+    return MC_NEWEST;
+}
+
+// Whether a structure type can be offered for the CURRENTLY LOADED world.
+//
+// Two independent reasons a type may not apply, and the caller cannot infer either one:
+//   - the version predates it (1.8 knows 8 structure types; 1.21.3 knows 24), and
+//   - it belongs to another dimension, which gen_structures refuses.
+// Offering a type that fails either test gives the user a control that finds nothing and
+// explains nothing, so the UI asks this instead of maintaining its own table.
+EMSCRIPTEN_KEEPALIVE
+int structure_supported(const char *name) {
+    if (!g_ready) return 0;
+    int t = structure_id(name);
+    if (t == -2) return g.dim == DIM_OVERWORLD; // strongholds: own algorithm, Overworld only
+    if (t < 0) return 0;
+    StructureConfig sc;
+    if (!getStructureConfig(t, g.mc, &sc)) return 0;
+    return sc.dim == g.dim;
+}
+
 // Slime chunks over a rectangle of CHUNK coordinates; `out` receives w*h bytes, 1 or 0.
 //
 // Bulk like gen_biomes rather than a per-chunk export, because the caller wants a whole

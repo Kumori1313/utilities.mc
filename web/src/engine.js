@@ -46,6 +46,8 @@ export async function boot() {
     biomeAt: Module.cwrap('get_biome_at', 'number', ['number', 'number', 'number', 'number']),
     biome2str: Module.cwrap('biome2str', 'string', ['number', 'number']),
     str2mc: Module.cwrap('str2mc', 'number', ['string']),
+    mc2str: Module.cwrap('mc2str', 'string', ['number']),
+    mcNewest: Module.cwrap('mc_newest', 'number', []),
     // Structures (12.4). Resolve the type through structure_id rather than hardcoding the
     // enum value: StructureType is positional, so a Cubiomes bump can renumber it.
     structureId: Module.cwrap('structure_id', 'number', ['string']),
@@ -56,6 +58,9 @@ export async function boot() {
     genSlimeChunks: Module.cwrap('gen_slime_chunks', 'number',
                                  ['number', 'number', 'number', 'number', 'number']),
     worldSpawn: Module.cwrap('world_spawn', 'number', ['number']),
+    // Asks the engine whether a type applies to the loaded version AND dimension, rather than
+    // the UI keeping its own table of which version introduced what.
+    structureSupported: Module.cwrap('structure_supported', 'number', ['string']),
     M: Module,
   };
 
