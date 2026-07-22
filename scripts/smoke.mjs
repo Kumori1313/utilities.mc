@@ -86,10 +86,14 @@ check('ground', 'set_world accepts a BigInt seed (i64 ABI intact)', rc, 0);
 //
 // Marked REGRESSION, not ground truth, deliberately. This point was checked against Chunkbase
 // early on and recorded as "ocean", but the engine says `deep_ocean` consistently — at the
-// surface, at get_biome_at(1, 0,64,0), and at scale 4. Chunkbase distinguishes Ocean from Deep
-// Ocean, so the note was most likely a loose paraphrase rather than a mismatch. Promoting a
-// half-remembered label to a ground-truth assertion would manufacture certainty that does not
-// exist, so this pins observed behaviour until someone re-checks the exact Chunkbase label.
+// surface, at get_biome_at(1, 0,64,0), and at scale 4.
+//
+// The Part 13 version work explains the discrepancy: this seed's origin biome IS `ocean` in
+// every version up to 1.17 and `deep_ocean` from 1.18 (both now confirmed against Chunkbase —
+// see the version section below). The early note was almost certainly read off a pre-1.18 view.
+// That resolves the contradiction, but it does not verify THIS assertion, which is 1.21.3: a
+// neighbouring version agreeing is an explanation, not an observation. Stays a regression until
+// someone reads the label off Chunkbase on 1.21.3 itself.
 const yPtr = M._malloc(4), idPtr = M._malloc(4);
 eng.genH(0, 0, 1, 1, yPtr, idPtr);
 check('regression', 'seed 1 surface biome at (0,0)', eng.b2s(mc, M.HEAP32[idPtr >> 2]), 'deep_ocean');
@@ -235,6 +239,13 @@ check('ground', 'villages present in every offered version',
 
 // Selecting a version must actually change generation, not just a label. Seed 1's origin biome
 // moved with the 1.18 overhaul, which is the cheapest observable proof of that.
+//
+// Ground truth: the biome maps for 1.8 (the scope floor) and 1.18 (the first version after the
+// overhaul) were both compared against Chunkbase on seed 1 and matched. The origin cell is the
+// pinned witness for each, since it is the centre of any view compared. Those two versions
+// bracket the only change in this range big enough to invalidate an entire era, so they are the
+// pair worth pinning — but the other 16 remain unverified, and a passing check here says
+// nothing about, say, 1.16.
 const biomeAt = (ver) => {
   eng.setWorld(BigInt.asUintN(64, 1n), ver, 0);
   const n = M.cwrap('biome_buffer_size', 'number', Array(4).fill('number'))(4, 4, 1, 4);
@@ -244,8 +255,11 @@ const biomeAt = (ver) => {
   M._free(p);
   return b;
 };
+check('ground', 'seed 1 origin biome in 1.8', biomeAt(eng.str2mc('1.8')), 'ocean');
+check('ground', 'seed 1 origin biome in 1.18', biomeAt(eng.str2mc('1.18')), 'deep_ocean');
+// 1.17 is unchecked externally, but it must agree with 1.8: the overhaul lands in 1.18, so the
+// whole pre-1.18 era shares one answer. This is what would catch the boundary drifting.
 check('regression', 'seed 1 origin biome in 1.17', biomeAt(eng.str2mc('1.17')), 'ocean');
-check('regression', 'seed 1 origin biome in 1.18', biomeAt(eng.str2mc('1.18')), 'deep_ocean');
 
 eng.setWorld(BigInt.asUintN(64, 1n), mc, 0); // restore for what follows
 

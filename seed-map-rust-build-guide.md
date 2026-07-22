@@ -1094,9 +1094,16 @@ Nearly free; do it first to prove the registry and the selector UI.
       Minecraft means updating the Cubiomes vendor, which is a dependency bump with its own
       re-verification pass (Part 8 against Chunkbase, pinned to the new version) — not a registry
       entry. Cap the offered list at what the build actually contains.
-- [ ] Re-run a handful of Part 8 Chunkbase spot-checks **per offered version**, not once. Biome
+- [x] Re-run a handful of Part 8 Chunkbase spot-checks **per offered version**, not once. Biome
       generation changed substantially across versions (1.18 in particular); a check that passes
       on 1.21.3 says nothing about 1.16.
+      **Checked on 1.8 and 1.18 (seed 1): both biome maps match Chunkbase.** Those two were the
+      right pair to spend the effort on, because they sit on opposite sides of the 1.18 overhaul —
+      the one change in this range large enough to have broken a whole era on its own. That the
+      floor and the first post-overhaul version both render correctly means the selector is
+      feeding the generator the version it names, in both noise systems. It does **not** cover
+      the smaller inter-version changes, so the remaining 15 stay unverified rather than assumed
+      good; see the UI note in `index.html`, which lists exactly what has been checked.
 
 ### Status: the map ships, the calculator does not
 
@@ -1106,7 +1113,16 @@ here: `structure_supported` answers for the loaded version *and* dimension, so p
 appear from 1.14, ancient cities from 1.19, trail ruins from 1.20 and trial chambers from 1.21,
 with no per-type version list in the UI. Selecting a version demonstrably changes generation:
 seed 1's origin biome is `ocean` up to 1.17 and `deep_ocean` from 1.18, the overhaul Part 7 was
-bitten by.
+bitten by. Both of those are now confirmed against Chunkbase, not merely observed.
+
+That confirmation also **settles an open question from Part 8**. The origin biome for seed 1 was
+recorded early on as "ocean" from a Chunkbase check, while the engine said `deep_ocean`; the
+smoke test pinned it as a regression rather than ground truth because the discrepancy could not
+be explained. It can now: `ocean` is exactly what pre-1.18 generation produces there. The
+original note was most likely taken from a pre-1.18 Chunkbase view and later attributed to
+1.21.3. Worth noting what this is *not* — 1.21.3's own origin biome still has no direct external
+check, so that assertion stays a regression. A neighbouring version agreeing is an explanation,
+not a substitute for looking.
 
 **13.3 is deliberately NOT implemented.** It is not blocked on code — the shape below is clear
 enough — but on *data*: each version needs its enchantment tables transcribed, under 10.2's
