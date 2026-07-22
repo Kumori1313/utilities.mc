@@ -1094,6 +1094,10 @@ Nearly free; do it first to prove the registry and the selector UI.
       Minecraft means updating the Cubiomes vendor, which is a dependency bump with its own
       re-verification pass (Part 8 against Chunkbase, pinned to the new version) — not a registry
       entry. Cap the offered list at what the build actually contains.
+      **This happened.** Upstream Cubiomes went dormant after 2024-11-10, capping us at 1.21.4
+      while Minecraft reached 1.21.11 and then a 26.x scheme. The engine moved to the
+      `xpple/cubiomes` fork (93 commits ahead, same MIT licence, all 13 functions the shim calls
+      unchanged in signature) — see 13.6 for how that swap was verified.
 - [x] **Landmine — Cubiomes' version labels understate what each entry covers, and the list
       looks mis-sorted as a result.** `mc2str` names each entry after the family it *starts*, not
       the release it tops out at: the entry spanning 1.16.2–1.16.5 is `MC_1_16_5`, but its label
@@ -1245,6 +1249,56 @@ version-independent merely because it currently passes for 1.21.3.
       version. Re-run the Chunkbase spot-checks, the external enchantment-calculator comparison,
       and the real-anvil check against each version you offer, and treat any version you have not
       checked as unverified — including in the UI, if you ship it anyway.
+
+## 13.6 — Swapping the engine vendor (done: Cubitect → xpple)
+
+Upstream Cubiomes stopped at 2024-11-10. Minecraft did not: the 1.21 line ran to 1.21.11 and
+then versioning moved to a 26.x scheme, with 26.2 adding sulfur cave biomes. `MC_NEWEST` capped
+the tool at 1.21.4 — a limit in the *vendored data*, not in any code here, and therefore not
+fixable here. This is the general shape of the problem: worldgen support is upstream's to
+provide, because the parameter tables come from reverse-engineering the game.
+
+Resolved by moving the submodule to `xpple/cubiomes` (93 commits ahead of upstream, 0 behind,
+MIT like upstream, actively maintained). Checks made **before** switching, in this order:
+
+- [x] **Do the functions we call still exist, unchanged?** All 13 the shim uses had identical
+      signatures. A swap that compiles but silently changes a signature's meaning is the bad case.
+- [x] **Is the licence compatible?** MIT to MIT.
+- [x] **Is it maintained, or a drive-by?** Recent commits, issue numbers referenced in messages,
+      the specific features claimed (sulfur caves, Nether terrain) present in the enum and tables.
+
+- [x] **The one that actually matters — does it change output for versions already verified?**
+      Every ground-truth assertion in this project is a claim about output from *a particular
+      engine*. A 93-commit swap can silently alter old versions, which would invalidate all of
+      Part 8 at once. Do not reason about this from commit messages. **Measure it**: load the
+      previously deployed `cubiomes.wasm` alongside the newly built one and compare them
+      directly, matching versions by label rather than enum id (ids shift when entries are
+      inserted). Result here: all 18 shared versions byte-identical across surface biomes,
+      terrain heights, Nether, End, and all 18 structure types over a 4096-block square — so the
+      existing verification carried over. Had anything differed, the honest move was to demote
+      Part 8's ground truth to regression, not to hope.
+- [x] **Split the assertions by verification tier afterwards.** The new versions inherit nothing.
+      The smoke test now checks 1.8–1.21.4 as ground truth and 1.21.5+ as regression, plus an
+      assertion that *both tiers are non-empty* — otherwise a future edit could empty one side
+      and leave a check that reads as though it still covers everything.
+
+Two defects the swap exposed, both worth keeping in mind for the next one:
+
+- [x] **A forked engine can be internally inconsistent.** `MC_1_21_6` exists in the enum but is
+      missing from **both** `mc2str` and `str2mc`, so it cannot be named in either direction and
+      cannot be offered. The registry's round-trip guard already refused it — correctly — but
+      silently. Gaps are now returned explicitly and asserted. Omitting it is harmless *because
+      it was measured to generate identically to both neighbours* (1.21.6 changed no worldgen),
+      not because that seemed likely.
+- [x] **A gap is not the same as "no predecessor".** The range logic reset its previous-entry
+      state on a skip, so the entry after the gap advertised `1.21 – 1.21.9` and swallowed the
+      four 1.21.x entries that really owned that range. An unknown lower bound must print **no**
+      range rather than a plausible one. The contiguity assertion is what catches this.
+
+Still outstanding after the swap: **1.21.5 and newer are unverified** against anything external,
+and the UI says so. Note also that 26.x differs from 1.21.11 *only in cave biomes at depth* —
+sulfur caves appear around y=-16 — so a surface biome map cannot distinguish them. Verifying the
+new versions needs either a cave-depth view or a check of something other than surface biomes.
 
 ## 12.6 — Structure coverage beyond the verified four
 

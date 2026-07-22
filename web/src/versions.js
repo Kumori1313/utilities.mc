@@ -41,10 +41,15 @@ function preciseLabel(engine, v, base) {
 //
 // Deliberately narrow, because a hardcoded label is exactly the thing that rots on a submodule
 // bump: it is keyed on the exact placeholder `mc2str` returns, and it changes the DISPLAY only.
-// `str2mc("1.21.4")` does not resolve, so the round-trip guard keeps using the engine's own
-// spelling via `key`. If a bump renames the enum — or adds a real 1.21.4 alongside a new Winter
-// Drop — this simply stops matching and goes quiet rather than mislabelling a different entry.
-const DISPLAY_OVERRIDE = { '1.21 WD': '1.21.4' };
+// The round-trip guard uses the engine's own spelling via `key`, so an override can never make
+// an entry claim a name the engine would resolve differently.
+//
+// It is EMPTY now, and that is the mechanism working rather than dead weight. The engine we
+// vendor renamed the entry and its `mc2str` returns "1.21.4" directly, so the override stopped
+// matching on its own — no code change, no mislabelled entry. Kept because Cubiomes ships
+// placeholders for versions Mojang has not numbered yet ("1.21 WD" was one), so the next
+// unreleased version will want exactly this again.
+const DISPLAY_OVERRIDE = {};
 
 const NUMERIC = /^(\d+\.\d+)\.(\d+)$/;
 
@@ -58,21 +63,27 @@ function rangeFrom(label, prev) {
 }
 
 /**
- * Build the offered version list: `{ id, key, label, covers }`, oldest first.
+ * Build the offered version list.
  *
- * `label` is the precise top of the entry ("1.16.5"); `covers` spells out the whole span
- * ("1.16.2 – 1.16.5") so someone running 1.16.3 can tell which entry is theirs — that is the
- * question the family labels leave unanswerable. `key` is the engine's own spelling, kept
- * separate because it is what must round-trip through `str2mc`; only the Winter Drop entry
- * currently differs from `label`. Nothing at runtime passes either string to the engine — the
- * selector carries `id` — so the strings are for humans and for the guard.
+ * Returns `{ versions, gaps }`. Each version is `{ id, key, label, covers }`: `label` is the
+ * precise top of the entry ("1.16.5"), and `covers` spells out the whole span ("1.16.2 –
+ * 1.16.5") so someone running 1.16.3 can tell which entry is theirs — the question the family
+ * labels leave unanswerable. `key` is the engine's own spelling, kept separate because it is
+ * what must round-trip through `str2mc`. Nothing at runtime passes either string to the engine
+ * — the selector carries `id` — so the strings are for humans and for the guard.
+ *
+ * `gaps` holds enum ids the engine cannot name (`mc2str` gives "?" or a string that will not
+ * parse back). Those cannot be offered: an option has to state which version it loads. They are
+ * returned rather than silently dropped so a caller can assert on them — a gap means the vendored
+ * engine knows a generator we cannot expose, which is a fact about the build worth surfacing.
  */
 export function buildVersions(engine, floorLabel = '1.8.9') {
   const floor = engine.str2mc(floorLabel);
   const newest = engine.mcNewest();
   if (floor <= 0) throw new Error(`engine does not know ${floorLabel}`);
 
-  const out = [];
+  const versions = [];
+  const gaps = [];
   // Start one below the floor so the floor's own range has a predecessor to measure against —
   // 1.8's entry covers 1.8–1.8.9 whether or not 1.7 is offered.
   let prev = null;
@@ -80,14 +91,25 @@ export function buildVersions(engine, floorLabel = '1.8.9') {
     const base = engine.mc2str(v);
     // Round-trip guard: only offer a version whose own label parses back to it, so a selector
     // entry can never resolve to a different world than the one it names.
-    if (!base || engine.str2mc(base) !== v) { prev = null; continue; }
+    if (!base || engine.str2mc(base) !== v) {
+      if (v >= floor) gaps.push(v);
+      // `prev` becomes UNKNOWN, not absent. Treating a gap as "no predecessor" would make the
+      // next entry claim its whole minor line — after skipping 1.21.6, the 1.21.9 entry would
+      // advertise "1.21 – 1.21.9" and swallow the 1.21.1, 1.21.3, 1.21.4 and 1.21.5 entries
+      // that really own that range. An unknown lower bound must print no range at all.
+      prev = undefined;
+      continue;
+    }
     const key = preciseLabel(engine, v, base);
     const label = DISPLAY_OVERRIDE[base] ?? key;
     if (v >= floor) {
-      const from = rangeFrom(label, prev);
-      out.push({ id: v, key, label, covers: from && from !== label ? `${from} – ${label}` : label });
+      const from = prev === undefined ? null : rangeFrom(label, prev);
+      versions.push({
+        id: v, key, label,
+        covers: from && from !== label ? `${from} – ${label}` : label,
+      });
     }
     prev = label;
   }
-  return out;
+  return { versions, gaps };
 }

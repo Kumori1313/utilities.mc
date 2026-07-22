@@ -33,7 +33,7 @@ try {
 const MAP_DEFAULT_VERSION = '1.21.3';
 let VERSIONS;
 try {
-  VERSIONS = buildVersions(engine);
+  ({ versions: VERSIONS } = buildVersions(engine));
 } catch (e) {
   setStatus(`${e.message} — cannot build a version list`, 'err');
   throw e;
