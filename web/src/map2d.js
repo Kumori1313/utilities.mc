@@ -81,6 +81,35 @@ const SLIME_MAX_BPP = 4;
 /// Chunk edge in blocks. Slime chunks are a chunk-grid property, not a biome one.
 const CHUNK = 16;
 
+/// Default draw height, in block y. Keeps the map a surface map unless asked otherwise.
+export const SEA_LEVEL = 63;
+
+/// Legal build range for 1.18+. Older versions have a 0..255 world, but their biomes are 2D
+/// and ignore y entirely, so the control is hidden there rather than clamped to a narrower
+/// range that would imply it does something.
+export const MIN_DEPTH = -64;
+export const MAX_DEPTH = 320;
+
+/// Whether a depth control does anything at all for this world. Overworld biomes only became
+/// three-dimensional in 1.18; before that, and in both other dimensions at the scales this map
+/// generates, y is ignored and a slider would be a control that silently changes nothing.
+/// Measured, not assumed: at seed 1 in a land area, moving y from 63 to -16 changes 458 of 4096
+/// cells on 1.18+ Overworld and exactly 0 cells on 1.17, in the Nether, and in the End.
+export function depthMatters(engine, version, dim) {
+  return dim === 0 && version >= engine.str2mc('1.18');
+}
+
+/// Tile cache key. Exported only so it can be tested without a DOM: it is the single line where
+/// this map can grow the cache bug it has hit before, where a cached tile from one world (or
+/// scale, or depth) is served for another and looks entirely correct on screen.
+///
+/// Everything that changes what a tile CONTAINS must appear here. Seed, version and dimension
+/// are absent deliberately — those clear the whole cache in `setWorld` instead, because they
+/// invalidate every entry rather than partitioning it.
+export function tileCacheKey(scale, tx, tz, depthY) {
+  return `${scale}:${tx}:${tz}:${depthY}`;
+}
+
 export function create2D({ canvas, engine, palette, mcVersion: initialVersion, ui, structures }) {
   const ctx = canvas.getContext('2d');
   const markerColor = new Map(STRUCTURE_TYPES.map((t) => [t.id, t.color]));
@@ -108,9 +137,14 @@ export function create2D({ canvas, engine, palette, mcVersion: initialVersion, u
   // entirely — omitting it would serve 4x-offset data, the same trap the Rust cache calls out.
   const tiles = new Map();
 
-  function tileKey(scale, tx, tz) {
-    return `${scale}:${tx}:${tz}`;
-  }
+  // Depth is in BLOCK y, the number a player reads off their F3 screen. The generator wants it
+  // in its own vertical units, which are 1:1 only at scale 1 and 1:4 everywhere else — so the
+  // conversion has to happen per draw, not once at the input. `>> 2` rather than `/ 4` because
+  // it floors toward negative infinity, which is what the cell containing y=-17 requires.
+  let depthY = SEA_LEVEL;
+  const genY = (scale) => (scale === 1 ? depthY : depthY >> 2);
+
+  const tileKey = (scale, tx, tz) => tileCacheKey(scale, tx, tz, depthY);
 
   function getTile(scale, tx, tz) {
     const key = tileKey(scale, tx, tz);
@@ -126,10 +160,7 @@ export function create2D({ canvas, engine, palette, mcVersion: initialVersion, u
   /// cache with garbage.
   function makeTile(scale, tx, tz) {
     const n = TILE_CELLS * TILE_CELLS;
-    // A near-sea-level layer, so the overview shows surface biomes (ocean, plains, forest)
-    // and not the deep cave biomes that appear near y=0. Cubiomes' vertical scaling is 1:1
-    // at scale 1 and 1:4 otherwise, so the y argument differs by scale.
-    const yArg = scale === 1 ? 63 : 15;
+    const yArg = genY(scale);
     const ptr = engine.M._malloc(n * 4);
     const rc = engine.genBiomes(
       scale, tx * TILE_CELLS, yArg, tz * TILE_CELLS, TILE_CELLS, 1, TILE_CELLS, ptr,
@@ -419,9 +450,13 @@ export function create2D({ canvas, engine, palette, mcVersion: initialVersion, u
     // the ground and a raw coordinate is not the one a player needs. Show the Overworld
     // equivalent alongside it — the ratio Part 11's converter already encodes.
     const equiv = dim === -1 ? ` (overworld ${Math.round(cx * 8)}, ${Math.round(cz * 8)})` : '';
+    // Show the depth only when it is off the surface, so the common case stays uncluttered but
+    // a cave layer can never be mistaken for a surface map.
+    const deep = depthMatters(engine, mcVersion, dim) && depthY !== SEA_LEVEL
+      ? ` · y ${depthY}` : '';
     ui.setStatus(
       `${DIM_LABEL[dim] ?? '2D'} · scale ${scale} · ${Math.round(w * bpp)} blocks across · ` +
-        `centre ${Math.round(cx)}, ${Math.round(cz)}${equiv}` +
+        `centre ${Math.round(cx)}, ${Math.round(cz)}${equiv}${deep}` +
         (pending > 0 ? ` · loading ${pending}` : ''),
       'ok',
     );
@@ -540,6 +575,25 @@ export function create2D({ canvas, engine, palette, mcVersion: initialVersion, u
       cx = x; cz = z;
       dirty = true;
       if (shown) draw();
+    },
+    /// Draw height, in block y. Clamped to the legal build range. Returns the value actually
+    /// used, so the caller can reflect a clamp back into its input rather than letting the two
+    /// disagree.
+    setDepth(y) {
+      const next = Math.max(MIN_DEPTH, Math.min(MAX_DEPTH, Math.round(y) || 0));
+      if (next === depthY) return next;
+      depthY = next;
+      // Not strictly required — depth is in the tile key, so old tiles could simply age out of
+      // the LRU. Cleared anyway because leaving them means every depth the user scrubs through
+      // stays resident, and a 1024-entry cache full of one seed's depth layers evicts the tiles
+      // actually on screen.
+      tiles.clear();
+      dirty = true;
+      if (shown) draw();
+      return next;
+    },
+    depth() {
+      return depthY;
     },
     /// Toggle the non-structure overlays. Returns nothing; re-renders if visible.
     setLayers({ slimeChunks, worldSpawn }) {

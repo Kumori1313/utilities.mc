@@ -71,6 +71,7 @@ const eng = {
   mc2str: M.cwrap('mc2str', 'string', ['number']),
   mcNewest: M.cwrap('mc_newest', 'number', []),
   structureSupported: M.cwrap('structure_supported', 'number', ['string']),
+  getBiomeAt: M.cwrap('get_biome_at', 'number', ['number', 'number', 'number', 'number']),
   M,
 };
 
@@ -367,7 +368,83 @@ check('ground', 'both verification tiers are non-empty',
 check('ground', 'the 1.18 overhaul is visible at the boundary',
   [biomeAt(eng.str2mc('1.17')), biomeAt(cut)], ['ocean', 'deep_ocean']);
 
-eng.setWorld(BigInt.asUintN(64, 1n), mc, 0); // restore for what follows
+// --- draw depth / cave biomes ---
+//
+// The 2D map draws one horizontal slice, at block y 60 by default, and the depth control moves
+// that slice. Coordinates below are from a search over seed 1 and are exact, so they double as
+// spots to check against Chunkbase.
+console.log('\ndepth');
+const SLICE_CELLS = 64;
+// map2d converts block y to generator y with `>> 2` at every scale but 1. Mirror that here
+// rather than passing generator units, so this exercises the same arithmetic the map does.
+const slice = (ver, dim, blockY, x0 = 512, scale = 4) => {
+  if (eng.setWorld(BigInt.asUintN(64, 1n), ver, dim) !== 0) return null;
+  const y = scale === 1 ? blockY : blockY >> 2;
+  const c = SLICE_CELLS;
+  const n = M.cwrap('biome_buffer_size', 'number', Array(4).fill('number'))(scale, c, 1, c);
+  const p = M._malloc(n * 4);
+  const rc = M.cwrap('gen_biomes', 'number', Array(8).fill('number'))(scale, x0, y, x0, c, 1, c, p);
+  const out = rc === 0 ? Array.from(new Int32Array(M.HEAP32.buffer, p, c * c)) : null;
+  M._free(p);
+  return out;
+};
+const diff = (a, b) => a.filter((x, i) => x !== b[i]).length;
+// Point lookup in BLOCK coordinates, converted the way the map does.
+const at = (ver, bx, by, bz) => {
+  eng.setWorld(BigInt.asUintN(64, 1n), ver, 0);
+  return eng.b2s(ver, eng.getBiomeAt(4, bx >> 2, by >> 2, bz >> 2));
+};
+
+// `>> 2` must floor toward negative infinity. Plain division truncates toward zero, which would
+// put y=-17 in the cell above the one containing it — a one-cell error only below y=0, i.e.
+// exactly in the range this feature exists to show.
+check('ground', 'block-to-generator y flooring is correct below zero',
+  [-16 >> 2, -17 >> 2, -1 >> 2, 63 >> 2], [-4, -5, -1, 15]);
+
+// Depth must do something where the UI offers it, and nothing where it hides it. This is the
+// measurement `depthMatters` encodes; if it ever inverts, the control lies in one direction or
+// the other.
+const v1213 = eng.str2mc('1.21.3'), v117 = eng.str2mc('1.17'), v262 = eng.str2mc('26.2');
+check('ground', 'depth changes the map on 1.18+ Overworld',
+  diff(slice(v1213, 0, 63), slice(v1213, 0, -16)) > 0, true);
+check('ground', 'depth is inert pre-1.18 and outside the Overworld',
+  [diff(slice(v117, 0, 63), slice(v117, 0, -16)),
+   diff(slice(v1213, -1, 63), slice(v1213, -1, -16)),
+   diff(slice(v1213, 1, 63), slice(v1213, 1, -16))], [0, 0, 0]);
+
+// Every cave biome must be reachable, not just the new one. A depth view that only ever
+// produced sulfur would be broken in a way a sulfur-only check could not see. These are the
+// first occurrence of each on seed 1, found by search.
+check('ground', 'cave biomes are reachable', [
+  at(v262, -3072, 60, -3072),
+  at(v262, -3068, 60, 184),
+  at(v262, -2516, 60, -3032),
+  at(v262, 1356, 60, 2980),
+], ['dripstone_caves', 'lush_caves', 'deep_dark', 'sulfur_caves']);
+
+// The 26.x check that matters. At (1356, 2980) the two versions disagree from y 60 down to
+// about -32, and agree above it.
+//
+// Note what is and is not true here. The TERRAIN SURFACE at this column is y~79 and reads
+// plains in both versions — so a map showing the true surface biome could not tell them apart.
+// This map draws a fixed y slice, and its default of 60 is already underground wherever terrain
+// rises above it, which is most land. So the difference is visible at the default depth; the
+// control exists to make that systematic rather than dependent on where terrain happens to sit.
+const SULFUR_COL = [1356, 2980];
+check('ground', '26.2 and 1.21.11 differ underground at a known column',
+  [at(v262, ...[SULFUR_COL[0], 60, SULFUR_COL[1]]), at(eng.str2mc('1.21.11'), SULFUR_COL[0], 60, SULFUR_COL[1])],
+  ['sulfur_caves', 'plains']);
+check('ground', 'the same column agrees above the sulfur layer',
+  [at(v262, 1356, 80, 2980), at(eng.str2mc('1.21.11'), 1356, 80, 2980)], ['plains', 'plains']);
+// The true terrain surface is identical, which is why this needed a depth slice rather than a
+// surface map, and why the sulfur band is genuinely underground rather than a surface biome.
+eng.setWorld(BigInt.asUintN(64, 1n), v262, 0);
+const hP = M._malloc(4), iP = M._malloc(4);
+eng.genH(1356 >> 2, 2980 >> 2, 1, 1, hP, iP);
+check('ground', 'terrain surface at that column is above the sulfur band',
+  [Math.round(new Float32Array(M.HEAPF32.buffer, hP, 1)[0]) > 60, eng.b2s(v262, M.HEAP32[iP >> 2])],
+  [true, 'plains']);
+M._free(hP); M._free(iP);
 
 console.log('\ncalculators');
 check('regression', 'enchant table version', app.enchant_version(), MC);

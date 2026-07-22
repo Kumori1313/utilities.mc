@@ -3,7 +3,7 @@
 //! toggle) over a shared engine and shared seed/coordinate inputs.
 
 import { boot, parseSeed } from './engine.js';
-import { create2D } from './map2d.js';
+import { create2D, depthMatters, SEA_LEVEL } from './map2d.js';
 import { create3D } from './map3d.js';
 import { setupEnchant } from './enchant-ui.js';
 import { setupPortal } from './portal-ui.js';
@@ -91,6 +91,7 @@ function loadWorld(seedText, x, z) {
   map2d.setWorld(seedText, x, z, dim, mcVersion);
   map3d.setWorld(seedText, x, z, dim, mcVersion);
   syncLayers(); // spawn is resolved per world, and the layers are Overworld-only
+  syncDepth();  // depth only applies to 1.18+ Overworld, which a load can change
 }
 
 $('dim').addEventListener('change', () => {
@@ -98,6 +99,7 @@ $('dim').addEventListener('change', () => {
   // Structure types are per-dimension, so the list has to be rebuilt before reloading.
   renderStructureList();
   syncLayers();
+  syncDepth();
   if (dim !== 0 && mapMode === '3d') setMode('2d'); // 3D has no terrain outside the Overworld
   syncModeAvailability();
   submit();
@@ -163,6 +165,42 @@ function syncLayers() {
 }
 $('layer-list').addEventListener('change', syncLayers);
 
+// --- draw depth (cave biomes) ------------------------------------------------
+//
+// Only shown where it does something. Overworld biomes became three-dimensional in 1.18; before
+// that, and in the Nether and End at the scales this map generates, y is ignored entirely — so
+// elsewhere this is hidden rather than left visible and inert. `depthMatters` owns that rule.
+//
+// The slider and the number box are two views of one value, so each writes through map2d and
+// then takes back what map2d actually used. That way a clamp (or a typed "9999") lands in both
+// boxes instead of leaving them disagreeing about what is on screen.
+function syncDepth() {
+  const active = depthMatters(engine, mcVersion, dim);
+  $('depth-wrap').classList.toggle('hidden', !active || mapMode === '3d');
+  if (!active) {
+    // Reset rather than remember. A depth carried silently into a version that ignores it would
+    // come back the next time the user picked a 1.18+ world, with no clue why the map changed.
+    if (map2d.depth() !== SEA_LEVEL) setDepth(SEA_LEVEL);
+    return;
+  }
+  const y = map2d.depth();
+  $('depth').value = y;
+  $('depth-n').value = y;
+  $('depth-hint').textContent = y === SEA_LEVEL
+    ? 'surface view — lower this to see cave biomes'
+    : `showing biomes at y ${y}, not the surface`;
+}
+function setDepth(y) {
+  const used = map2d.setDepth(y);
+  $('depth').value = used;
+  $('depth-n').value = used;
+  syncDepth();
+}
+// `input` on the slider fires per pixel of travel; map2d coalesces draws into a frame, so the
+// generation cost is bounded by the frame budget rather than by event count.
+$('depth').addEventListener('input', () => setDepth(+$('depth').value));
+$('depth-n').addEventListener('change', () => setDepth(+$('depth-n').value));
+
 // Nearest-structure locator. Run on demand rather than continuously: the search is anchored
 // to the centre at the moment it runs, so recomputing while panning would re-target the lines
 // under the user's hand. Its type list is populated by renderStructureList(), per dimension.
@@ -208,6 +246,7 @@ function setMode(mode) {
   $('view2d').classList.toggle('hidden', mode !== '2d');
   $('view3d').classList.toggle('hidden', mode !== '3d');
   $('rdist-wrap').classList.toggle('hidden', mode !== '3d');
+  syncDepth(); // the 3D view renders terrain, not a depth slice
   $('structs').classList.toggle('hidden', mode !== '2d');
   $('map2d-hint').classList.toggle('hidden', mode !== '2d');
   $('map3d-hint').classList.toggle('hidden', mode !== '3d');

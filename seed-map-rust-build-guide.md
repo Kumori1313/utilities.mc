@@ -1296,9 +1296,49 @@ Two defects the swap exposed, both worth keeping in mind for the next one:
       range rather than a plausible one. The contiguity assertion is what catches this.
 
 Still outstanding after the swap: **1.21.5 and newer are unverified** against anything external,
-and the UI says so. Note also that 26.x differs from 1.21.11 *only in cave biomes at depth* —
-sulfur caves appear around y=-16 — so a surface biome map cannot distinguish them. Verifying the
-new versions needs either a cave-depth view or a check of something other than surface biomes.
+and the UI says so. 13.7 adds the depth control that makes them checkable.
+
+## 13.7 — Drawing a depth slice, so cave biomes are visible
+
+26.x differs from 1.21.11 in exactly one thing: the `sulfur_caves` biome. It is underground, so
+the question was whether the map could show it at all. Answer: yes, and the change is small,
+because the 2D map was *already* drawing a fixed horizontal slice (block y 60) rather than the
+terrain surface. Making that y adjustable is the whole feature.
+
+- [x] Take the control's value in **block y**, the number on the F3 screen, and convert per draw.
+      Cubiomes' vertical scaling is 1:1 only at scale 1 and 1:4 otherwise, so the conversion
+      depends on the scale the zoom picked and cannot be done once at the input.
+- [x] **Use `>> 2`, not `/ 4`.** Truncating division rounds toward zero, so y=-17 would land in
+      the cell above the one containing it. That error appears only below y=0 — precisely the
+      range this feature exists to show.
+- [x] **Landmine — depth must be in the tile cache key.** Same rule as scale: the same tile index
+      at another depth is different ground. Without it a cave layer shows surface tiles, or a mix,
+      depending on what happened to be cached — the convincingly-wrong failure this project has
+      hit before. It is also the one line the smoke test cannot reach, since map2d needs a DOM, so
+      the key is exported and unit-tested separately.
+- [x] **Hide the control where it does nothing.** Overworld biomes became 3D in 1.18; before
+      that, and in the Nether and End at these scales, y is ignored entirely. Measured rather than
+      assumed: moving y from 63 to -16 at seed 1 changes 458 of 4096 cells on 1.18+ Overworld and
+      exactly 0 on 1.17, in the Nether, and in the End. Reset it when hiding, or a depth carried
+      into a version that ignores it reappears later with no explanation.
+
+**A correction worth recording.** The 13.6 note said 26.x could not be distinguished on a surface
+map. That was wrong in a way worth understanding. The *terrain surface* biome is indeed identical
+— at (1356, 2980) the surface is y≈79 and reads `plains` in both versions. But this map does not
+draw the terrain surface; it draws a fixed y slice, and its default of 60 is already **underground
+wherever terrain rises above it**, which is most land. So at that column the map shows
+`sulfur_caves` on 26.2 and `plains` on 1.21.11 *at the default depth*, and 26.x was checkable all
+along. The depth control makes it systematic instead of dependent on where terrain happens to sit
+relative to y=60.
+
+The general lesson: "the map shows surface biomes" was an approximation nobody had restated since
+it was written, and a conclusion got built on it. When a claim about the tool's own behaviour is
+load-bearing, re-derive it from the code rather than from memory of the code.
+
+- [ ] Verify 1.21.5+ against Chunkbase. (1356, 2980) at depth 60 is a ready-made spot: 26.2 should
+      show sulfur caves there and 1.21.11 plains. Cave biomes generally are reachable — verified
+      first occurrences on seed 1 are dripstone at (-3072, -3072), lush caves at (-3068, 184) and
+      deep dark at (-2516, -3032), all at y 60.
 
 ## 12.6 — Structure coverage beyond the verified four
 

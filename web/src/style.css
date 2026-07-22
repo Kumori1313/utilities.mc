@@ -85,6 +85,13 @@ body { font: 13px/1.5 system-ui, sans-serif; color: #e6e8ee; display: flex; flex
 #panel .coords .fld { flex: 1; }
 #panel #go { width: 100%; margin-top: 0; }
 
+/* depth: slider for scrubbing, number box for typing an exact y. The number box is sized to
+   fit "-64" through "320" so it does not steal width from the slider. */
+#depth-wrap { margin-top: .6rem; }
+#panel .depth-row { display: flex; align-items: center; gap: .5rem; }
+#panel .depth-row #depth { flex: 1; min-width: 0; width: auto; }
+#panel .depth-row #depth-n { width: 4.25rem; flex: none; font-variant-numeric: tabular-nums; }
+
 /* --- forms (shared by calculators) --- */
 .form-view { max-width: 44rem; margin: 0 auto; }
 h2 { margin: 0 0 .3rem; font-size: 1.15rem; }

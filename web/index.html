@@ -38,6 +38,15 @@
         <label class="fld">z <input id="cz" value="0" inputmode="numeric"></label>
       </div>
       <button id="go">load</button>
+      <div id="depth-wrap" class="hidden">
+        <label class="fld">depth (block y)
+          <span class="depth-row">
+            <input id="depth" type="range" min="-64" max="320" step="1" value="63">
+            <input id="depth-n" type="number" min="-64" max="320" step="1" value="63">
+          </span>
+        </label>
+        <p class="hint" id="depth-hint"></p>
+      </div>
       <label id="rdist-wrap" class="hidden">render distance
         <input id="rdist" type="range" min="1" max="8" value="3">
         <span id="rdist-val">3</span></label>
