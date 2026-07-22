@@ -1398,9 +1398,45 @@ externally yet. What is ground truth is the shape:
       Outpost positions at 1.14 and 1.18 are now ground truth. Note how narrow that still is —
       one type, one seed, one boundary — and that it is worth stating in those terms rather than
       as "structures are verified".
-- [ ] Then repeat for one pre-1.18 type that is not gated on 1.14 — village or desert pyramid —
-      to separate "outposts are right" from "1.18 is handled right". Those two claims are
-      currently entangled: every outpost check that discriminates does so at the 1.18 boundary.
+- [x] Then repeat for one pre-1.18 type that is not gated on 1.14 — desert pyramids, which have
+      existed since 1.3, so their behaviour at 1.18 tests version-dependent viability alone.
+
+### Desert pyramids across the 1.18 boundary
+
+Three positions have clean era masks — present across exactly one era, absent across the other,
+switching at 1.18 and nowhere else — plus one control present in all 23 versions:
+
+| coordinate | 1.8.9 – 1.17.1 | 1.18.2 – 26.2 |
+|---|---|---|
+| (2624, 2816) | pyramid | none |
+| (-1760, 3936) | pyramid | none |
+| (-2848, -10000) | none | pyramid |
+| (768, 10880) | pyramid | pyramid |
+
+- [x] **Screen candidates through the footprint rule before offering them.** Cubiomes checks only
+      the biome, so it reports pyramids the game declines to place when the 21x21 footprint dips
+      below sea level. Offering an unscreened coordinate would mean re-discovering that known
+      limitation and reading it as a version bug. Re-deriving the screen on the nine positions
+      already checked reproduces a clean gap: absent cases have footprint minima 50-64, present
+      cases 74-76. Every coordinate above clears it comfortably.
+- [x] **Caveat — the screen is calibrated on 1.18+ heights only.** `mapApproxHeight` has a
+      genuinely different branch below 1.18 (a biome depth/scale kernel rather than the noise
+      depth parameter), so the threshold does not transfer with known accuracy. The two pre-1.18
+      coordinates sit at footprint minima of 77 and 72, far enough above the boundary that a few
+      blocks of error in an uncalibrated estimate should not matter — but that is a judgement,
+      not a measurement.
+- [x] **A check that passed under the bug it was written for.** The first version of the
+      version-sensitivity assertion compared two positions' era masks and required them to
+      differ. A version-blind tool passes that easily: it still returns a *constant* mask per
+      position, and two positions can be constantly different. The property that actually
+      separates the two worlds is that some position's mask is **not constant**. Same failure as
+      the flight test asserting finiteness instead of direction — the assertion was about the
+      wrong property, and only mutation testing exposed it.
+
+- [ ] Check the four coordinates above against Chunkbase on one pre-1.18 version and one 1.18+
+      version. Positions are regression until then; what is already ground truth is the shape —
+      that pyramids exist in every version, that presence varies with version rather than only
+      with position, and that the boundary sits at 1.18 exactly.
 
 ## 12.6 — Structure coverage beyond the verified four
 

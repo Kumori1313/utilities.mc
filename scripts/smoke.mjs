@@ -392,6 +392,62 @@ check('ground', 'Chunkbase-checked outpost that survives every version',
   ['1.14.4', '1.15.2', '1.16.1', '1.16.5', '1.17.1', '1.18.2', '1.21.3', '26.2']
     .filter((l) => !hasOutpost(l, 1888, -3504)), []);
 
+// --- desert pyramids: a type that exists in every version ---
+//
+// The outpost checks entangle two claims, because outposts arrive AT 1.14 and change AT 1.18:
+// "the introduction gate is right" and "1.18 is handled right" cannot be told apart from them.
+// Desert pyramids have existed since 1.3, so their behaviour at the 1.18 boundary tests the
+// version-dependent viability alone.
+//
+// REGRESSION until checked against Chunkbase. The era *shape* below is ground truth, since a
+// position flipping cleanly at exactly one boundary is a property of this code.
+const hasPyramid = (verId, x, z) => {
+  eng.setWorld(BigInt.asUintN(64, 1n), verId, 0);
+  const cap = 64;
+  const p = M._malloc(cap * 8);
+  const n = eng.genStructures(eng.structureId('desert_pyramid'), x - 64, z - 64, x + 64, z + 64, p, cap);
+  let hit = false;
+  if (n > 0) {
+    const a = new Int32Array(M.HEAP32.buffer, p, n * 2);
+    for (let i = 0; i < n; i++) if (a[i * 2] === x && a[i * 2 + 1] === z) hit = true;
+  }
+  M._free(p);
+  return hit;
+};
+const era = (x, z) => registry.map((v) => hasPyramid(v.id, x, z));
+const PRE = registry.map((v) => v.id < eng.str2mc('1.18'));
+const POST = PRE.map((b) => !b);
+
+check('ground', 'desert pyramids exist in every offered version',
+  registry.filter((v) => !supAt(v.id, 'desert_pyramid')), []);
+// Each of these is present across exactly one era and absent across the other, with the switch
+// at 1.18 and nowhere else. Asserted against the era mask rather than a literal array so it
+// stays meaningful if the offered list grows.
+check('regression', 'a pyramid confined to the pre-1.18 era', era(2624, 2816), PRE);
+check('regression', 'another confined to the pre-1.18 era', era(-1760, 3936), PRE);
+check('regression', 'a pyramid confined to the 1.18+ era', era(-2848, -10000), POST);
+// The control: present in all 23. Chunkbase already confirms it on 1.21.3 (it is one of the
+// nine positions from the footprint investigation), so this one is ground truth for that
+// version and regression for the rest.
+check('regression', 'a pyramid present in every version',
+  era(768, 10880), registry.map(() => true));
+
+// The failure this guards is a tool that ignores the version and answers from one generation
+// for all of them.
+//
+// A first attempt here compared two positions' masks and asserted they differ. That passes
+// under exactly the bug it was meant to catch: a version-blind tool still gives a CONSTANT mask
+// per position, and two positions can be constantly-different. The property that actually
+// distinguishes the two worlds is that some position's mask is *not constant*.
+const notConstant = (m) => m.some((v) => v !== m[0]);
+check('ground', 'pyramid presence varies with version, not just with position',
+  [notConstant(era(2624, 2816)), notConstant(era(-2848, -10000)),
+   notConstant(era(768, 10880))], [true, true, false]);
+// And that the switch happens at 1.18 specifically — a mask that flipped anywhere else would
+// still be "distinguishable" while pointing at the wrong boundary.
+check('ground', 'the pyramid era boundary sits exactly at 1.18',
+  era(2624, 2816).map((v, i) => v === PRE[i]).every(Boolean), true);
+
 // Ground truth, because these are structural rather than positional. 1.18 rebuilt terrain and
 // biomes, and outpost viability is a biome check, so the two eras must disagree — if they ever
 // agreed it would mean the version was not reaching the viability test at all.
