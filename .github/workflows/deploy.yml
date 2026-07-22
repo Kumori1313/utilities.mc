@@ -60,8 +60,20 @@ jobs:
             crates/enchant/target
           key: cargo-${{ runner.os }}-${{ hashFiles('app/Cargo.lock', 'crates/enchant/Cargo.lock') }}
 
+      # Pinned to the dev toolchain's version, NOT left to the action's default.
+      #
+      # The action defaults to wasm-pack 0.9.1, which bundles a wasm-opt predating multi-table
+      # wasm. Current wasm-bindgen emits exactly that, so the release build died with
+      # "Only 1 table definition allowed in MVP" while the identical build passed locally on
+      # 0.15.0. Same shape as the Emscripten incident above: CI silently ran a toolchain six
+      # versions behind the one every local build used, and nothing asserted they matched.
+      #
+      # When the local wasm-pack is upgraded, change this to match. A version nobody has run
+      # locally is a pin waiting to fail.
       - name: Install wasm-pack
         uses: jetli/wasm-pack-action@v0.4.0
+        with:
+          version: v0.15.0
 
       - uses: actions/setup-node@v4
         with:
