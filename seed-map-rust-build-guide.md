@@ -1509,9 +1509,72 @@ bastions do not — while in 1.16–1.17 each rolled independently and some regi
 **Where this leaves per-version structure coverage.** Verified across versions: outposts (1.14
 and 1.18 boundaries), desert pyramids (1.18 boundary), fortresses and bastions (1.18 swap), End
 cities (all versions, via invariance), End gateways (all four regimes). Still 1.21.3-only: the
-remaining Overworld types. Still unverified at any version: pre-1.18 Overworld boundaries at 1.9
-and 1.16 — every flip candidate failed the footprint screen, and that screen is uncalibrated
-below 1.18, so it needs a different method rather than more searching.
+remaining Overworld types. The pre-1.18 Overworld boundaries are handled next, in 13.10.
+
+## 13.10 — The pre-1.18 Overworld boundaries (1.9 and 1.16)
+
+The earlier attempt on these searched **desert pyramids** for a coordinate that flips across the
+boundary, and every candidate died on the same screen: a pyramid does not generate partly
+submerged, so the finder applies a footprint/sea-level check — and that check is uncalibrated
+below 1.18, where terrain is a different noise system. So a failed candidate could not be told
+apart from a mis-screened one. The lesson was not "search harder" but **change the instrument**:
+pick discriminators with no sea-level constraint at all.
+
+**1.9 — two independent mechanisms.**
+
+- **Strongholds.** They are underground, so there is no terrain gate whatsoever. The count jumps
+  `3 → 128` at exactly 1.9 (`finders.c`: `mc >= MC_1_9 ? 128 : 3`), and the ring algorithm
+  changes, so the first stronghold moves `(-92, -732) → (-220, -1916)`. The count step is ground
+  truth from the source; the positions are pending Chunkbase.
+- **MC-98995.** This is the sharp one, and it came out of reading `biomes.c`, not searching.
+  `getMutated` emulates a real Minecraft bug present only in 1.9–1.10: `birch_forest` mutates to
+  `tall_birch_HILLS` instead of `tall_birch_forest`, reverting at 1.11 (`mc >= MC_1_9 && mc <=
+  MC_1_10`). So a single coordinate — `(-352, 992)` — reads `tall_birch_forest / tall_birch_hills
+  / tall_birch_hills / tall_birch_forest` across 1.8.9 / 1.9 / 1.10 / 1.11. A **two-version
+  window** no version-blind tool can produce, and it is a pure biome read, which the map already
+  verifies against Chunkbase. The smoke test also asserts the window is exactly 1.9–1.10 across
+  the whole offered list, which is the property the source encodes.
+
+  Worth keeping as method: the biome map changes at *every* boundary (an 11-cell grid delta at
+  1.9, one cell at 1.16, 387 at 1.13, 2264 at 1.18), and biomes need no viability screen. When a
+  structure boundary resists verification, the biome delta underneath it may be directly
+  checkable instead.
+
+**1.16 — introduction gate plus a resize signature.**
+
+- **Ruined portals** arrive at 1.16.1 (config gate), so the absent side needs no screen at all.
+  `(304, 288)` is absent through 1.15.2 and present from 1.16.1.
+- **Shipwrecks** grew their region grid `16×8 → 24×20` at 1.16, which moves coordinates both
+  *out* of and *into* the generated set across one boundary — the sharpest 1.16 test, because it
+  flips in both directions. `(48, 16)` is present 1.13.2–1.15.2 and gone at 1.16.1; `(-288, 176)`
+  is the reverse.
+- **The control had to be a different type.** The resize reshuffles the shipwreck field so
+  completely that *no* shipwreck survives the boundary, so a same-type control is impossible. A
+  **monument** — whose config does not change at 1.16 — that stays put at `(-960, -288)` fills
+  that role, ruling out a tool that shifts positions by the wrong rule (which the two shipwreck
+  flips alone would not catch).
+
+Mutation test: a version-blind engine answering everything from 1.21.3 trips every one of these —
+count reads 128 at 1.8.9, the birch cell reads `old_growth_birch_forest` (never hills), ruined
+portals report as available at 1.8.9, and both shipwreck flips collapse to a constant.
+
+- [x] **Structural / code-derived claims are ground truth**: the stronghold count step, the
+      ruined-portal availability step, and the exact 1.9–1.10 span of the birch window.
+- [ ] **Coordinate-level claims pending Chunkbase** (regression until then):
+      | boundary | coordinate | claim |
+      |---|---|---|
+      | 1.9 | first stronghold | `(-92, -732)` on 1.8.9, `(-220, -1916)` on 1.9.4 |
+      | 1.9 | `(-352, 992)` | `tall_birch_forest` → `tall_birch_hills` (1.9–1.10) → back at 1.11 |
+      | 1.16 | `(304, 288)` | ruined portal absent ≤1.15.2, present ≥1.16.1 |
+      | 1.16 | `(48, 16)` | shipwreck present 1.13.2–1.15.2, gone at 1.16.1 (resize out) |
+      | 1.16 | `(-288, 176)` | shipwreck absent ≤1.15.2, present ≥1.16.1 (resize in) |
+      | 1.16 | `(-960, -288)` | monument unchanged across the boundary (cross-type control) |
+
+**Where this leaves per-version structure coverage.** Verified or code-pinned across versions:
+outposts, desert pyramids, fortresses/bastions, End cities and gateways, plus the 1.9 and 1.16
+Overworld boundaries above. Still 1.21.3-only: the remaining Overworld types, at versions away
+from a boundary — a broad-but-shallow gap rather than a sharp one, since every version-sensitive
+config change now has at least one boundary witness.
 
 ## 12.6 — Structure coverage beyond the verified four
 

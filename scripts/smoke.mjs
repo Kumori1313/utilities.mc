@@ -680,6 +680,84 @@ check('ground', 'the per-version check covers the whole offered list',
 check('ground', 'the 1.18 overhaul is visible at the boundary',
   [biomeAt(eng.str2mc('1.17')), biomeAt(cut)], ['ocean', 'deep_ocean']);
 
+// --- structure positions across the pre-1.18 boundaries: 1.9 and 1.16 ---
+//
+// These are the two boundaries the outpost/pyramid work left open. The earlier attempt searched
+// desert pyramids for a flip and every candidate died on the footprint screen — a pyramid does
+// not generate partly submerged, and that screen is uncalibrated below 1.18, so it could not
+// tell "no flip here" from "screen is wrong here". The fix was not more searching but a change
+// of instrument: pick discriminators with NO sea-level constraint.
+//
+//   1.9  — strongholds (underground; there is no terrain gate at all) and the MC-98995 birch
+//          mutation (a pure biome read, which the user already verifies against Chunkbase).
+//   1.16 — the ruined-portal introduction gate (the ABSENT side needs no screen) and the
+//          shipwreck region resize (16x8 -> 24x20), which is a submerged type.
+//
+// Coordinate-level claims are REGRESSION pending Chunkbase; the availability steps and counts
+// are ground truth because they follow from the configs.
+const strongholdsAt = (label) => {
+  eng.setWorld(BigInt.asUintN(64, 1n), eng.str2mc(label), 0);
+  const cap = 200, p = M._malloc(cap * 8);
+  const n = eng.genStrongholds(p, cap);
+  const a = new Int32Array(M.HEAP32.buffer, p, Math.max(n, 1) * 2);
+  const first = [a[0], a[1]];
+  M._free(p);
+  return { n, first };
+};
+// The count jumps 3 -> 128 at exactly 1.9 (finders.c: `mc >= MC_1_9 ? 128 : 3`). This is the
+// step, asserted over the whole list so a salt-only change could not slip past a boundary pair.
+check('ground', 'stronghold count is 3 before 1.9 and 128 from 1.9 on',
+  registry.map((v) => [v.label, strongholdsAt(v.label).n]),
+  registry.map((v) => [v.label, v.id >= eng.str2mc('1.9') ? 128 : 3]));
+// The first stronghold's position also moves across the boundary — a different ring algorithm,
+// not just more of them. Both sides need Chunkbase.
+check('regression', 'first stronghold before and after 1.9',
+  [strongholdsAt('1.8.9').first, strongholdsAt('1.9.4').first], [[-92, -732], [-220, -1916]]);
+
+// MC-98995: birch_forest mutates to tall_birch_HILLS in 1.9-1.10 only, reverting to
+// tall_birch_forest at 1.11 (biomes.c getMutated, `mc >= MC_1_9 && mc <= MC_1_10`). A single
+// coordinate therefore shows a two-version window that no version-blind tool can produce, and
+// that a tool applying the mutation to the wrong range would place wrong.
+const biomeStr = (label, x, z) => {
+  const v = eng.str2mc(label);
+  eng.setWorld(BigInt.asUintN(64, 1n), v, 0);
+  return eng.b2s(v, eng.getBiomeAt(1, x, 63, z));
+};
+check('regression', 'MC-98995 birch window at (-352, 992)',
+  ['1.8.9', '1.9.4', '1.10.2', '1.11.2'].map((l) => biomeStr(l, -352, 992)),
+  ['tall_birch_forest', 'tall_birch_hills', 'tall_birch_hills', 'tall_birch_forest']);
+// And that the window is exactly 1.9-1.10 across the whole list, not merely different at one
+// pair — the property the source encodes, stated directly.
+check('ground', 'the birch mutation window is exactly 1.9 through 1.10',
+  registry.map((v) => biomeStr(v.label, -352, 992) === 'tall_birch_hills'),
+  registry.map((v) => v.id >= eng.str2mc('1.9') && v.id <= eng.str2mc('1.10.2')));
+
+// 1.16: ruined portals arrive at 1.16.1 (config gate). Assert the step over the whole list; the
+// position is one coordinate on the present side, pending Chunkbase.
+check('ground', 'ruined portals are available from 1.16.1 onward and never before',
+  registry.map((v) => [v.label, supAt(v.id, 'ruined_portal')]),
+  registry.map((v) => [v.label, v.id >= eng.str2mc('1.16.1')]));
+check('regression', 'a ruined portal present from 1.16.1',
+  ['1.15.2', '1.16.1', '1.16.5', '1.17.1'].map((l) => hasAt(eng.str2mc(l), 0, 'ruined_portal', 304, 288)),
+  [false, true, true, true]);
+
+// 1.16: the shipwreck region grid grew 16x8 -> 24x20, so a coordinate can move OUT of the
+// generated set and another can move IN across the same boundary — the resize signature, and
+// the sharpest 1.16 test because it flips in both directions. Both coordinates are stable on
+// their respective sides (checked 1.13.2-1.15.2 and 1.16.1-1.17.1). Pending Chunkbase.
+const V152 = eng.str2mc('1.15.2'), V161 = eng.str2mc('1.16.1');
+check('regression', 'a shipwreck the 1.16 resize moves out of the grid',
+  [hasAt(V152, 0, 'shipwreck', 48, 16), hasAt(V161, 0, 'shipwreck', 48, 16)], [true, false]);
+check('regression', 'a shipwreck the 1.16 resize moves into the grid',
+  [hasAt(V152, 0, 'shipwreck', -288, 176), hasAt(V161, 0, 'shipwreck', -288, 176)], [false, true]);
+// The control has to be a DIFFERENT type: the shipwreck resize reshuffles the field so
+// completely that no shipwreck survives the boundary, so a same-type control is impossible. A
+// monument (whose config does not change at 1.16) that stays put proves the version reaches the
+// generator correctly for a type that should not move — ruling out a tool that shifts positions
+// by the wrong rule, which the two shipwreck flips alone would not catch. Stable 1.13.2-1.17.1.
+check('regression', 'a monument unchanged across the 1.16 boundary (cross-type control)',
+  [hasAt(V152, 0, 'monument', -960, -288), hasAt(V161, 0, 'monument', -960, -288)], [true, true]);
+
 // --- draw depth / cave biomes ---
 //
 // The 2D map draws one horizontal slice, at block y 60 by default, and the depth control moves
