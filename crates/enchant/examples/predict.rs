@@ -1,21 +1,45 @@
 //! CLI for cross-referencing the enchantment calculator (Part 10.5 aid).
 //!
-//!   cargo run -p enchant --example predict -- <xp_seed> <bookshelves> [item ...]
+//!   cargo run -p enchant --example predict -- [--version <ver>] <xp_seed> <bookshelves> [item ...]
 //!
 //! xp_seed is the per-player value the other calculator also takes as input; both must
 //! use the SAME seed or nothing will line up. Bookshelves 0..=15. Items default to a
-//! representative spread if none are given.
+//! representative spread if none are given. `--version` selects which transcribed table to
+//! roll against (default: newest) — this is the tool for the per-version external cross-check
+//! a new dataset needs (Part 13.3/10.5).
 
-use enchant::{MC_VERSION, default_table, enchantments_in_slot, offered_levels};
+use enchant::{
+    default_table, enchantments_in_slot, offered_levels, table as version_table, versions,
+};
 
 fn main() {
-    // The default (newest) version's table. A `--version` selector belongs in the UI wiring
-    // (Part 13.5); this cross-reference CLI stays on the default for now.
-    let table = default_table();
-    let args: Vec<String> = std::env::args().skip(1).collect();
+    let mut args: Vec<String> = std::env::args().skip(1).collect();
+
+    // Optional `--version <ver>`, resolved against the registry. An unknown version is a hard
+    // error here (unlike the forgiving wasm surface) — a cross-check run must roll against the
+    // version it names, not a silent fallback.
+    let mut table = default_table();
+    if let Some(i) = args.iter().position(|a| a == "--version") {
+        let ver = args.get(i + 1).cloned().unwrap_or_else(|| {
+            eprintln!(
+                "--version needs a value; offered: {}",
+                versions().join(", ")
+            );
+            std::process::exit(2);
+        });
+        table = version_table(&ver).unwrap_or_else(|| {
+            eprintln!(
+                "unknown version {ver:?}; offered: {}",
+                versions().join(", ")
+            );
+            std::process::exit(2);
+        });
+        args.drain(i..=i + 1);
+    }
+
     if args.len() < 2 {
-        eprintln!("usage: predict <xp_seed> <bookshelves> [item ...]");
-        eprintln!("  e.g. predict -1234567 15 diamond_sword book");
+        eprintln!("usage: predict [--version <ver>] <xp_seed> <bookshelves> [item ...]");
+        eprintln!("  e.g. predict --version 1.16.5 -1234567 15 diamond_sword book");
         std::process::exit(2);
     }
 
@@ -36,7 +60,10 @@ fn main() {
         .collect()
     };
 
-    println!("utilities.mc enchantment calculator — Minecraft {MC_VERSION}");
+    println!(
+        "utilities.mc enchantment calculator — Minecraft {}",
+        table.mc_version
+    );
     println!("xp seed {xp_seed}, {shelves} bookshelves");
     println!("(offered levels are the green numbers; enchantments are what each slot rolls)\n");
 

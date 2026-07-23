@@ -861,5 +861,27 @@ check('ground', 'anvil: fortune 3 + unbreaking 3 costs 10', app.anvil_optimize(M
 check('regression', 'anvil: fortune 3 at prior work 2', app.anvil_optimize(MC, 'fortune=3', 2).total, 9);
 check('regression', 'grid rows for a diamond pickaxe', app.enchant_applicable(MC, 'diamond_pickaxe').length, 6);
 
+// A second transcribed table, 1.16.5 (Part 13.3), generated from PrismarineJS pc/1.16.4 diffed
+// against the verified 1.21.3 data. These pin that the registry genuinely carries two versions
+// and that selecting one changes the answer — a version-blind calculator would fail all four.
+check('ground', 'the registry carries both transcribed versions',
+  app.enchant_versions().slice().sort(), ['1.16.5', '1.21.3']);
+// 1.16.5 predates the mace (density/breach/wind_burst) and swift_sneak, so it has 4 fewer.
+check('ground', '1.16.5 has 38 enchantments to 1.21.3 s 42',
+  [app.enchant_names('1.16.5').length, app.enchant_names('1.21.3').length], [38, 42]);
+// The mace item does not exist in 1.16.5, so it is absent from that version's anvil planner.
+check('ground', 'the mace is offered on 1.21.3 but not 1.16.5',
+  [app.anvil_items('1.21.3').some((x) => x.endsWith('|mace')),
+   app.anvil_items('1.16.5').some((x) => x.endsWith('|mace'))], [true, false]);
+// The damage-exclusivity group is smaller in 1.16.5: impaling is ungrouped and breach/density
+// do not exist, so sharpness conflicts with only bane_of_arthropods and smite.
+check('ground', '1.16.5 sharpness has the smaller pre-1.21 conflict set',
+  app.enchant_conflicts('1.16.5', 'sharpness').slice().sort(), ['bane_of_arthropods', 'smite']);
+// Same seed, same item, different version -> different roll, because the candidate pool differs.
+// REGRESSION: the 1.16.5 value is not yet externally cross-checked (see the dataset provenance).
+check('regression', 'the same book seed rolls differently on 1.16.5 vs 1.21.3',
+  [app.enchant_slot('1.16.5', -1234567, 2, 'book', 30),
+   app.enchant_slot('1.21.3', -1234567, 2, 'book', 30)], ['loyalty 3', 'fortune 2']);
+
 console.log(`\n${failures ? `${failures} FAILURE(S)` : 'smoke test passed'}`);
 process.exit(failures ? 1 : 0);

@@ -1181,14 +1181,28 @@ its job rather than a gap.
 
 The bulk of the work, and it is transcription plus codegen rather than algorithms.
 
-**Status — the architecture is done; the data is the remaining half.** The codegen, the
-version-scoped registry, and the whole call surface (core → wasm → UI) are multi-version and
-every test is green. What is NOT done, because it is human-blocked, is adding a *second dataset*:
-the 10.2 rule (two independent transcriptions) and per-version golden vectors from a matching JDK
-cannot be produced here. So the machinery carries exactly one version (1.21.3) today, and adding
-another is now a pure-data operation — drop a `data/enchantments-<ver>.json` file with its
-`_provenance` block and it appears in the registry and the UI picker with no code change. The
-`predict`/`anvil` example CLIs generate cross-reference output for that verification.
+**Status — architecture done, and a second dataset now exists (1.16.5).** The codegen, the
+version-scoped registry, and the whole call surface (core → wasm → UI) are multi-version; the
+registry carries **1.21.3 and 1.16.5**, and the enchant tab offers both. Adding a version is a
+pure-data operation — drop a `data/enchantments-<ver>.json` with its `_provenance` block and it
+appears in the registry and the picker with no code change.
+
+The 10.2 "two independent transcriptions" rule was met without a JDK: **1.16.5 is *generated*,
+not typed** (`scripts/gen-enchant-1.16.5.py`), by diffing two independent sources —
+PrismarineJS `pc/1.16.4` (weight, max_level, min_cost, treasure, exclude) against this repo's
+verified 1.21.3 data (max_cost, anvil_cost, applicability). The generator refuses to run unless
+the sources agree on the overlapping fields, so a transcription slip cannot pass silently. The
+real 1.16→1.21 deltas it applies are small and confirmed by source A: four enchantments absent
+(mace's breach/density/wind_burst; swift_sneak), a smaller damage-exclusivity group, and no
+mace/brush items. PrismarineJS's known-buggy `max_cost` (a generic `10·level+51`) is explicitly
+not used — `max_cost` carries from 1.21.3, valid because `min_cost` is identical.
+
+What remains for 1.16.5 is the **roll-level external cross-check** — the same manual step 1.21.3
+needed, comparing `cargo run -p enchant --example predict -- --version 1.16.5` against an in-game
+1.16.5 table or an external 1.16.5 calculator. Until then its numeric roll output is *regression*,
+not ground truth; the structural facts (enchantment set, conflict groups, item set) are checked in
+`smoke.mjs`. Golden vectors from a matching JDK would upgrade that, and remain the one thing a JDK
+is needed for.
 
 - [x] **One dataset file per version.** `build.rs` globs `data/enchantments-*.json`, emits one
       statics block per file, and orders them newest-first into a `TABLES` array with a

@@ -1,0 +1,1343 @@
+{
+  "_provenance": {
+    "minecraft_version": "1.16.5",
+    "method": "Generated from the verified 1.21.3 dataset + PrismarineJS pc/1.16.4 by scripts/gen-enchant-1.16.5.py. Do not hand-edit; re-run the script.",
+    "enchantments": {
+      "source_a": "PrismarineJS/minecraft-data @ pc/1.16.4 (covers 1.16.4 and 1.16.5): weight, max_level, min_cost, treasureOnly, exclude, discoverable.",
+      "source_b": "this repo's verified 1.21.3 dataset: max_cost, anvil_cost, primary_items/supported_items, slots \u2014 provably unchanged since A and B agree on min_cost, weight, max_level and treasure for every shared enchantment (the generator asserts this).",
+      "agreement": "38 shared enchantments; 0 disagreements on the overlapping fields. Real deltas: 4 enchantments absent in 1.16.5, smaller damage group.",
+      "deltas_from_1_21_3": "removed breach, density, wind_burst (mace, 1.21) and swift_sneak (1.19); damage exclusivity is sharpness<->smite<->bane_of_arthropods only (impaling ungrouped; no breach/density).",
+      "max_cost_note": "PrismarineJS 1.16.4 max_cost is a buggy generic 10*level+51 for ~10 enchantments (efficiency serialises 61 vs the game's 51) and is NOT used; max_cost is taken from 1.21.3, valid because min_cost is identical.",
+      "id_note": "PrismarineJS's 'sweeping' is written as the 1.21 id 'sweeping_edge' for display consistency; the id is cosmetic to the roll.",
+      "in_enchanting_table": "NOT treasureOnly (source_a); non-table in 1.16.5: mending, frost_walker, soul_speed, binding_curse, vanishing_curse."
+    },
+    "enchantability": {
+      "source": "1.21.3 material/item enchantability minus mace; values unchanged across 1.16.5-1.21.3.",
+      "caveat": "inherits the single-source-lineage caveat on the values from 1.21.3."
+    },
+    "item_tags": {
+      "source": "1.21.3 tags minus the mace tag and the mace/brush items."
+    },
+    "item_enchantability": {
+      "derivation": "1.21.3 item_enchantability minus mace and brush."
+    },
+    "verification_status": {
+      "transcription": "two independent sources diffed by the generator, 0 disagreements.",
+      "external_cross_check": "PENDING \u2014 roll-level check against an in-game 1.16.5 table or an external 1.16.5 calculator (the manual step 1.21.3 also required). Use `cargo run -p enchant --example predict -- --version 1.16.5`."
+    }
+  },
+  "enchantability": {
+    "_comment": "armor / tool values per material; 'other' covers book, bow, crossbow, trident, fishing rod",
+    "wood": {
+      "tool": 15
+    },
+    "leather": {
+      "armor": 15
+    },
+    "stone": {
+      "tool": 5
+    },
+    "chain": {
+      "armor": 12
+    },
+    "iron": {
+      "armor": 9,
+      "tool": 14
+    },
+    "gold": {
+      "armor": 25,
+      "tool": 22
+    },
+    "diamond": {
+      "armor": 10,
+      "tool": 10
+    },
+    "turtle": {
+      "armor": 9
+    },
+    "netherite": {
+      "armor": 15,
+      "tool": 15
+    },
+    "other": {
+      "armor": 1,
+      "tool": 1
+    }
+  },
+  "enchantments": {
+    "aqua_affinity": {
+      "weight": 2,
+      "max_level": 1,
+      "min_cost": {
+        "base": 1,
+        "per_level": 0
+      },
+      "max_cost": {
+        "base": 41,
+        "per_level": 0
+      },
+      "anvil_cost": 4,
+      "exclusive_with": [],
+      "primary_items": null,
+      "supported_items": "#minecraft:enchantable/head_armor",
+      "slots": [
+        "head"
+      ],
+      "in_enchanting_table": true,
+      "treasure": false
+    },
+    "bane_of_arthropods": {
+      "weight": 5,
+      "max_level": 5,
+      "min_cost": {
+        "base": 5,
+        "per_level": 8
+      },
+      "max_cost": {
+        "base": 25,
+        "per_level": 8
+      },
+      "anvil_cost": 2,
+      "exclusive_with": [
+        "sharpness",
+        "smite"
+      ],
+      "primary_items": "#minecraft:enchantable/sword",
+      "supported_items": "#minecraft:enchantable/weapon",
+      "slots": [
+        "mainhand"
+      ],
+      "in_enchanting_table": true,
+      "treasure": false
+    },
+    "binding_curse": {
+      "weight": 1,
+      "max_level": 1,
+      "min_cost": {
+        "base": 25,
+        "per_level": 0
+      },
+      "max_cost": {
+        "base": 50,
+        "per_level": 0
+      },
+      "anvil_cost": 8,
+      "exclusive_with": [],
+      "primary_items": null,
+      "supported_items": "#minecraft:enchantable/equippable",
+      "slots": [
+        "armor"
+      ],
+      "in_enchanting_table": false,
+      "treasure": true
+    },
+    "blast_protection": {
+      "weight": 2,
+      "max_level": 4,
+      "min_cost": {
+        "base": 5,
+        "per_level": 8
+      },
+      "max_cost": {
+        "base": 13,
+        "per_level": 8
+      },
+      "anvil_cost": 4,
+      "exclusive_with": [
+        "fire_protection",
+        "projectile_protection",
+        "protection"
+      ],
+      "primary_items": null,
+      "supported_items": "#minecraft:enchantable/armor",
+      "slots": [
+        "armor"
+      ],
+      "in_enchanting_table": true,
+      "treasure": false
+    },
+    "channeling": {
+      "weight": 1,
+      "max_level": 1,
+      "min_cost": {
+        "base": 25,
+        "per_level": 0
+      },
+      "max_cost": {
+        "base": 50,
+        "per_level": 0
+      },
+      "anvil_cost": 8,
+      "exclusive_with": [
+        "riptide"
+      ],
+      "primary_items": null,
+      "supported_items": "#minecraft:enchantable/trident",
+      "slots": [
+        "mainhand"
+      ],
+      "in_enchanting_table": true,
+      "treasure": false
+    },
+    "depth_strider": {
+      "weight": 2,
+      "max_level": 3,
+      "min_cost": {
+        "base": 10,
+        "per_level": 10
+      },
+      "max_cost": {
+        "base": 25,
+        "per_level": 10
+      },
+      "anvil_cost": 4,
+      "exclusive_with": [
+        "frost_walker"
+      ],
+      "primary_items": null,
+      "supported_items": "#minecraft:enchantable/foot_armor",
+      "slots": [
+        "feet"
+      ],
+      "in_enchanting_table": true,
+      "treasure": false
+    },
+    "efficiency": {
+      "weight": 10,
+      "max_level": 5,
+      "min_cost": {
+        "base": 1,
+        "per_level": 10
+      },
+      "max_cost": {
+        "base": 51,
+        "per_level": 10
+      },
+      "anvil_cost": 1,
+      "exclusive_with": [],
+      "primary_items": null,
+      "supported_items": "#minecraft:enchantable/mining",
+      "slots": [
+        "mainhand"
+      ],
+      "in_enchanting_table": true,
+      "treasure": false
+    },
+    "feather_falling": {
+      "weight": 5,
+      "max_level": 4,
+      "min_cost": {
+        "base": 5,
+        "per_level": 6
+      },
+      "max_cost": {
+        "base": 11,
+        "per_level": 6
+      },
+      "anvil_cost": 2,
+      "exclusive_with": [],
+      "primary_items": null,
+      "supported_items": "#minecraft:enchantable/foot_armor",
+      "slots": [
+        "armor"
+      ],
+      "in_enchanting_table": true,
+      "treasure": false
+    },
+    "fire_aspect": {
+      "weight": 2,
+      "max_level": 2,
+      "min_cost": {
+        "base": 10,
+        "per_level": 20
+      },
+      "max_cost": {
+        "base": 60,
+        "per_level": 20
+      },
+      "anvil_cost": 4,
+      "exclusive_with": [],
+      "primary_items": "#minecraft:enchantable/sword",
+      "supported_items": "#minecraft:enchantable/fire_aspect",
+      "slots": [
+        "mainhand"
+      ],
+      "in_enchanting_table": true,
+      "treasure": false
+    },
+    "fire_protection": {
+      "weight": 5,
+      "max_level": 4,
+      "min_cost": {
+        "base": 10,
+        "per_level": 8
+      },
+      "max_cost": {
+        "base": 18,
+        "per_level": 8
+      },
+      "anvil_cost": 2,
+      "exclusive_with": [
+        "blast_protection",
+        "projectile_protection",
+        "protection"
+      ],
+      "primary_items": null,
+      "supported_items": "#minecraft:enchantable/armor",
+      "slots": [
+        "armor"
+      ],
+      "in_enchanting_table": true,
+      "treasure": false
+    },
+    "flame": {
+      "weight": 2,
+      "max_level": 1,
+      "min_cost": {
+        "base": 20,
+        "per_level": 0
+      },
+      "max_cost": {
+        "base": 50,
+        "per_level": 0
+      },
+      "anvil_cost": 4,
+      "exclusive_with": [],
+      "primary_items": null,
+      "supported_items": "#minecraft:enchantable/bow",
+      "slots": [
+        "mainhand"
+      ],
+      "in_enchanting_table": true,
+      "treasure": false
+    },
+    "fortune": {
+      "weight": 2,
+      "max_level": 3,
+      "min_cost": {
+        "base": 15,
+        "per_level": 9
+      },
+      "max_cost": {
+        "base": 65,
+        "per_level": 9
+      },
+      "anvil_cost": 4,
+      "exclusive_with": [
+        "silk_touch"
+      ],
+      "primary_items": null,
+      "supported_items": "#minecraft:enchantable/mining_loot",
+      "slots": [
+        "mainhand"
+      ],
+      "in_enchanting_table": true,
+      "treasure": false
+    },
+    "frost_walker": {
+      "weight": 2,
+      "max_level": 2,
+      "min_cost": {
+        "base": 10,
+        "per_level": 10
+      },
+      "max_cost": {
+        "base": 25,
+        "per_level": 10
+      },
+      "anvil_cost": 4,
+      "exclusive_with": [
+        "depth_strider"
+      ],
+      "primary_items": null,
+      "supported_items": "#minecraft:enchantable/foot_armor",
+      "slots": [
+        "feet"
+      ],
+      "in_enchanting_table": false,
+      "treasure": true
+    },
+    "impaling": {
+      "weight": 2,
+      "max_level": 5,
+      "min_cost": {
+        "base": 1,
+        "per_level": 8
+      },
+      "max_cost": {
+        "base": 21,
+        "per_level": 8
+      },
+      "anvil_cost": 4,
+      "exclusive_with": [],
+      "primary_items": null,
+      "supported_items": "#minecraft:enchantable/trident",
+      "slots": [
+        "mainhand"
+      ],
+      "in_enchanting_table": true,
+      "treasure": false
+    },
+    "infinity": {
+      "weight": 1,
+      "max_level": 1,
+      "min_cost": {
+        "base": 20,
+        "per_level": 0
+      },
+      "max_cost": {
+        "base": 50,
+        "per_level": 0
+      },
+      "anvil_cost": 8,
+      "exclusive_with": [
+        "mending"
+      ],
+      "primary_items": null,
+      "supported_items": "#minecraft:enchantable/bow",
+      "slots": [
+        "mainhand"
+      ],
+      "in_enchanting_table": true,
+      "treasure": false
+    },
+    "knockback": {
+      "weight": 5,
+      "max_level": 2,
+      "min_cost": {
+        "base": 5,
+        "per_level": 20
+      },
+      "max_cost": {
+        "base": 55,
+        "per_level": 20
+      },
+      "anvil_cost": 2,
+      "exclusive_with": [],
+      "primary_items": null,
+      "supported_items": "#minecraft:enchantable/sword",
+      "slots": [
+        "mainhand"
+      ],
+      "in_enchanting_table": true,
+      "treasure": false
+    },
+    "looting": {
+      "weight": 2,
+      "max_level": 3,
+      "min_cost": {
+        "base": 15,
+        "per_level": 9
+      },
+      "max_cost": {
+        "base": 65,
+        "per_level": 9
+      },
+      "anvil_cost": 4,
+      "exclusive_with": [],
+      "primary_items": null,
+      "supported_items": "#minecraft:enchantable/sword",
+      "slots": [
+        "mainhand"
+      ],
+      "in_enchanting_table": true,
+      "treasure": false
+    },
+    "loyalty": {
+      "weight": 5,
+      "max_level": 3,
+      "min_cost": {
+        "base": 12,
+        "per_level": 7
+      },
+      "max_cost": {
+        "base": 50,
+        "per_level": 0
+      },
+      "anvil_cost": 2,
+      "exclusive_with": [
+        "riptide"
+      ],
+      "primary_items": null,
+      "supported_items": "#minecraft:enchantable/trident",
+      "slots": [
+        "mainhand"
+      ],
+      "in_enchanting_table": true,
+      "treasure": false
+    },
+    "luck_of_the_sea": {
+      "weight": 2,
+      "max_level": 3,
+      "min_cost": {
+        "base": 15,
+        "per_level": 9
+      },
+      "max_cost": {
+        "base": 65,
+        "per_level": 9
+      },
+      "anvil_cost": 4,
+      "exclusive_with": [],
+      "primary_items": null,
+      "supported_items": "#minecraft:enchantable/fishing",
+      "slots": [
+        "mainhand"
+      ],
+      "in_enchanting_table": true,
+      "treasure": false
+    },
+    "lure": {
+      "weight": 2,
+      "max_level": 3,
+      "min_cost": {
+        "base": 15,
+        "per_level": 9
+      },
+      "max_cost": {
+        "base": 65,
+        "per_level": 9
+      },
+      "anvil_cost": 4,
+      "exclusive_with": [],
+      "primary_items": null,
+      "supported_items": "#minecraft:enchantable/fishing",
+      "slots": [
+        "mainhand"
+      ],
+      "in_enchanting_table": true,
+      "treasure": false
+    },
+    "mending": {
+      "weight": 2,
+      "max_level": 1,
+      "min_cost": {
+        "base": 25,
+        "per_level": 25
+      },
+      "max_cost": {
+        "base": 75,
+        "per_level": 25
+      },
+      "anvil_cost": 4,
+      "exclusive_with": [
+        "infinity"
+      ],
+      "primary_items": null,
+      "supported_items": "#minecraft:enchantable/durability",
+      "slots": [
+        "any"
+      ],
+      "in_enchanting_table": false,
+      "treasure": true
+    },
+    "multishot": {
+      "weight": 2,
+      "max_level": 1,
+      "min_cost": {
+        "base": 20,
+        "per_level": 0
+      },
+      "max_cost": {
+        "base": 50,
+        "per_level": 0
+      },
+      "anvil_cost": 4,
+      "exclusive_with": [
+        "piercing"
+      ],
+      "primary_items": null,
+      "supported_items": "#minecraft:enchantable/crossbow",
+      "slots": [
+        "mainhand"
+      ],
+      "in_enchanting_table": true,
+      "treasure": false
+    },
+    "piercing": {
+      "weight": 10,
+      "max_level": 4,
+      "min_cost": {
+        "base": 1,
+        "per_level": 10
+      },
+      "max_cost": {
+        "base": 50,
+        "per_level": 0
+      },
+      "anvil_cost": 1,
+      "exclusive_with": [
+        "multishot"
+      ],
+      "primary_items": null,
+      "supported_items": "#minecraft:enchantable/crossbow",
+      "slots": [
+        "mainhand"
+      ],
+      "in_enchanting_table": true,
+      "treasure": false
+    },
+    "power": {
+      "weight": 10,
+      "max_level": 5,
+      "min_cost": {
+        "base": 1,
+        "per_level": 10
+      },
+      "max_cost": {
+        "base": 16,
+        "per_level": 10
+      },
+      "anvil_cost": 1,
+      "exclusive_with": [],
+      "primary_items": null,
+      "supported_items": "#minecraft:enchantable/bow",
+      "slots": [
+        "mainhand"
+      ],
+      "in_enchanting_table": true,
+      "treasure": false
+    },
+    "projectile_protection": {
+      "weight": 5,
+      "max_level": 4,
+      "min_cost": {
+        "base": 3,
+        "per_level": 6
+      },
+      "max_cost": {
+        "base": 9,
+        "per_level": 6
+      },
+      "anvil_cost": 2,
+      "exclusive_with": [
+        "blast_protection",
+        "fire_protection",
+        "protection"
+      ],
+      "primary_items": null,
+      "supported_items": "#minecraft:enchantable/armor",
+      "slots": [
+        "armor"
+      ],
+      "in_enchanting_table": true,
+      "treasure": false
+    },
+    "protection": {
+      "weight": 10,
+      "max_level": 4,
+      "min_cost": {
+        "base": 1,
+        "per_level": 11
+      },
+      "max_cost": {
+        "base": 12,
+        "per_level": 11
+      },
+      "anvil_cost": 1,
+      "exclusive_with": [
+        "blast_protection",
+        "fire_protection",
+        "projectile_protection"
+      ],
+      "primary_items": null,
+      "supported_items": "#minecraft:enchantable/armor",
+      "slots": [
+        "armor"
+      ],
+      "in_enchanting_table": true,
+      "treasure": false
+    },
+    "punch": {
+      "weight": 2,
+      "max_level": 2,
+      "min_cost": {
+        "base": 12,
+        "per_level": 20
+      },
+      "max_cost": {
+        "base": 37,
+        "per_level": 20
+      },
+      "anvil_cost": 4,
+      "exclusive_with": [],
+      "primary_items": null,
+      "supported_items": "#minecraft:enchantable/bow",
+      "slots": [
+        "mainhand"
+      ],
+      "in_enchanting_table": true,
+      "treasure": false
+    },
+    "quick_charge": {
+      "weight": 5,
+      "max_level": 3,
+      "min_cost": {
+        "base": 12,
+        "per_level": 20
+      },
+      "max_cost": {
+        "base": 50,
+        "per_level": 0
+      },
+      "anvil_cost": 2,
+      "exclusive_with": [],
+      "primary_items": null,
+      "supported_items": "#minecraft:enchantable/crossbow",
+      "slots": [
+        "mainhand",
+        "offhand"
+      ],
+      "in_enchanting_table": true,
+      "treasure": false
+    },
+    "respiration": {
+      "weight": 2,
+      "max_level": 3,
+      "min_cost": {
+        "base": 10,
+        "per_level": 10
+      },
+      "max_cost": {
+        "base": 40,
+        "per_level": 10
+      },
+      "anvil_cost": 4,
+      "exclusive_with": [],
+      "primary_items": null,
+      "supported_items": "#minecraft:enchantable/head_armor",
+      "slots": [
+        "head"
+      ],
+      "in_enchanting_table": true,
+      "treasure": false
+    },
+    "riptide": {
+      "weight": 2,
+      "max_level": 3,
+      "min_cost": {
+        "base": 17,
+        "per_level": 7
+      },
+      "max_cost": {
+        "base": 50,
+        "per_level": 0
+      },
+      "anvil_cost": 4,
+      "exclusive_with": [
+        "channeling",
+        "loyalty"
+      ],
+      "primary_items": null,
+      "supported_items": "#minecraft:enchantable/trident",
+      "slots": [
+        "hand"
+      ],
+      "in_enchanting_table": true,
+      "treasure": false
+    },
+    "sharpness": {
+      "weight": 10,
+      "max_level": 5,
+      "min_cost": {
+        "base": 1,
+        "per_level": 11
+      },
+      "max_cost": {
+        "base": 21,
+        "per_level": 11
+      },
+      "anvil_cost": 1,
+      "exclusive_with": [
+        "bane_of_arthropods",
+        "smite"
+      ],
+      "primary_items": "#minecraft:enchantable/sword",
+      "supported_items": "#minecraft:enchantable/sharp_weapon",
+      "slots": [
+        "mainhand"
+      ],
+      "in_enchanting_table": true,
+      "treasure": false
+    },
+    "silk_touch": {
+      "weight": 1,
+      "max_level": 1,
+      "min_cost": {
+        "base": 15,
+        "per_level": 0
+      },
+      "max_cost": {
+        "base": 65,
+        "per_level": 0
+      },
+      "anvil_cost": 8,
+      "exclusive_with": [
+        "fortune"
+      ],
+      "primary_items": null,
+      "supported_items": "#minecraft:enchantable/mining_loot",
+      "slots": [
+        "mainhand"
+      ],
+      "in_enchanting_table": true,
+      "treasure": false
+    },
+    "smite": {
+      "weight": 5,
+      "max_level": 5,
+      "min_cost": {
+        "base": 5,
+        "per_level": 8
+      },
+      "max_cost": {
+        "base": 25,
+        "per_level": 8
+      },
+      "anvil_cost": 2,
+      "exclusive_with": [
+        "bane_of_arthropods",
+        "sharpness"
+      ],
+      "primary_items": "#minecraft:enchantable/sword",
+      "supported_items": "#minecraft:enchantable/weapon",
+      "slots": [
+        "mainhand"
+      ],
+      "in_enchanting_table": true,
+      "treasure": false
+    },
+    "soul_speed": {
+      "weight": 1,
+      "max_level": 3,
+      "min_cost": {
+        "base": 10,
+        "per_level": 10
+      },
+      "max_cost": {
+        "base": 25,
+        "per_level": 10
+      },
+      "anvil_cost": 8,
+      "exclusive_with": [],
+      "primary_items": null,
+      "supported_items": "#minecraft:enchantable/foot_armor",
+      "slots": [
+        "feet"
+      ],
+      "in_enchanting_table": false,
+      "treasure": true
+    },
+    "sweeping_edge": {
+      "weight": 2,
+      "max_level": 3,
+      "min_cost": {
+        "base": 5,
+        "per_level": 9
+      },
+      "max_cost": {
+        "base": 20,
+        "per_level": 9
+      },
+      "anvil_cost": 4,
+      "exclusive_with": [],
+      "primary_items": null,
+      "supported_items": "#minecraft:enchantable/sword",
+      "slots": [
+        "mainhand"
+      ],
+      "in_enchanting_table": true,
+      "treasure": false
+    },
+    "thorns": {
+      "weight": 1,
+      "max_level": 3,
+      "min_cost": {
+        "base": 10,
+        "per_level": 20
+      },
+      "max_cost": {
+        "base": 60,
+        "per_level": 20
+      },
+      "anvil_cost": 8,
+      "exclusive_with": [],
+      "primary_items": "#minecraft:enchantable/chest_armor",
+      "supported_items": "#minecraft:enchantable/armor",
+      "slots": [
+        "any"
+      ],
+      "in_enchanting_table": true,
+      "treasure": false
+    },
+    "unbreaking": {
+      "weight": 5,
+      "max_level": 3,
+      "min_cost": {
+        "base": 5,
+        "per_level": 8
+      },
+      "max_cost": {
+        "base": 55,
+        "per_level": 8
+      },
+      "anvil_cost": 2,
+      "exclusive_with": [],
+      "primary_items": null,
+      "supported_items": "#minecraft:enchantable/durability",
+      "slots": [
+        "any"
+      ],
+      "in_enchanting_table": true,
+      "treasure": false
+    },
+    "vanishing_curse": {
+      "weight": 1,
+      "max_level": 1,
+      "min_cost": {
+        "base": 25,
+        "per_level": 0
+      },
+      "max_cost": {
+        "base": 50,
+        "per_level": 0
+      },
+      "anvil_cost": 8,
+      "exclusive_with": [],
+      "primary_items": null,
+      "supported_items": "#minecraft:enchantable/vanishing",
+      "slots": [
+        "any"
+      ],
+      "in_enchanting_table": false,
+      "treasure": true
+    }
+  },
+  "item_tags": {
+    "armor": [
+      "chainmail_boots",
+      "chainmail_chestplate",
+      "chainmail_helmet",
+      "chainmail_leggings",
+      "diamond_boots",
+      "diamond_chestplate",
+      "diamond_helmet",
+      "diamond_leggings",
+      "golden_boots",
+      "golden_chestplate",
+      "golden_helmet",
+      "golden_leggings",
+      "iron_boots",
+      "iron_chestplate",
+      "iron_helmet",
+      "iron_leggings",
+      "leather_boots",
+      "leather_chestplate",
+      "leather_helmet",
+      "leather_leggings",
+      "netherite_boots",
+      "netherite_chestplate",
+      "netherite_helmet",
+      "netherite_leggings",
+      "turtle_helmet"
+    ],
+    "bow": [
+      "bow"
+    ],
+    "chest_armor": [
+      "chainmail_chestplate",
+      "diamond_chestplate",
+      "golden_chestplate",
+      "iron_chestplate",
+      "leather_chestplate",
+      "netherite_chestplate"
+    ],
+    "crossbow": [
+      "crossbow"
+    ],
+    "durability": [
+      "bow",
+      "carrot_on_a_stick",
+      "chainmail_boots",
+      "chainmail_chestplate",
+      "chainmail_helmet",
+      "chainmail_leggings",
+      "crossbow",
+      "diamond_axe",
+      "diamond_boots",
+      "diamond_chestplate",
+      "diamond_helmet",
+      "diamond_hoe",
+      "diamond_leggings",
+      "diamond_pickaxe",
+      "diamond_shovel",
+      "diamond_sword",
+      "elytra",
+      "fishing_rod",
+      "flint_and_steel",
+      "golden_axe",
+      "golden_boots",
+      "golden_chestplate",
+      "golden_helmet",
+      "golden_hoe",
+      "golden_leggings",
+      "golden_pickaxe",
+      "golden_shovel",
+      "golden_sword",
+      "iron_axe",
+      "iron_boots",
+      "iron_chestplate",
+      "iron_helmet",
+      "iron_hoe",
+      "iron_leggings",
+      "iron_pickaxe",
+      "iron_shovel",
+      "iron_sword",
+      "leather_boots",
+      "leather_chestplate",
+      "leather_helmet",
+      "leather_leggings",
+      "netherite_axe",
+      "netherite_boots",
+      "netherite_chestplate",
+      "netherite_helmet",
+      "netherite_hoe",
+      "netherite_leggings",
+      "netherite_pickaxe",
+      "netherite_shovel",
+      "netherite_sword",
+      "shears",
+      "shield",
+      "stone_axe",
+      "stone_hoe",
+      "stone_pickaxe",
+      "stone_shovel",
+      "stone_sword",
+      "trident",
+      "turtle_helmet",
+      "warped_fungus_on_a_stick",
+      "wooden_axe",
+      "wooden_hoe",
+      "wooden_pickaxe",
+      "wooden_shovel",
+      "wooden_sword"
+    ],
+    "equippable": [
+      "carved_pumpkin",
+      "chainmail_boots",
+      "chainmail_chestplate",
+      "chainmail_helmet",
+      "chainmail_leggings",
+      "creeper_head",
+      "diamond_boots",
+      "diamond_chestplate",
+      "diamond_helmet",
+      "diamond_leggings",
+      "dragon_head",
+      "elytra",
+      "golden_boots",
+      "golden_chestplate",
+      "golden_helmet",
+      "golden_leggings",
+      "iron_boots",
+      "iron_chestplate",
+      "iron_helmet",
+      "iron_leggings",
+      "leather_boots",
+      "leather_chestplate",
+      "leather_helmet",
+      "leather_leggings",
+      "netherite_boots",
+      "netherite_chestplate",
+      "netherite_helmet",
+      "netherite_leggings",
+      "piglin_head",
+      "player_head",
+      "skeleton_skull",
+      "turtle_helmet",
+      "wither_skeleton_skull",
+      "zombie_head"
+    ],
+    "fire_aspect": [
+      "diamond_sword",
+      "golden_sword",
+      "iron_sword",
+      "netherite_sword",
+      "stone_sword",
+      "wooden_sword"
+    ],
+    "fishing": [
+      "fishing_rod"
+    ],
+    "foot_armor": [
+      "chainmail_boots",
+      "diamond_boots",
+      "golden_boots",
+      "iron_boots",
+      "leather_boots",
+      "netherite_boots"
+    ],
+    "head_armor": [
+      "chainmail_helmet",
+      "diamond_helmet",
+      "golden_helmet",
+      "iron_helmet",
+      "leather_helmet",
+      "netherite_helmet",
+      "turtle_helmet"
+    ],
+    "leg_armor": [
+      "chainmail_leggings",
+      "diamond_leggings",
+      "golden_leggings",
+      "iron_leggings",
+      "leather_leggings",
+      "netherite_leggings"
+    ],
+    "mining": [
+      "diamond_axe",
+      "diamond_hoe",
+      "diamond_pickaxe",
+      "diamond_shovel",
+      "golden_axe",
+      "golden_hoe",
+      "golden_pickaxe",
+      "golden_shovel",
+      "iron_axe",
+      "iron_hoe",
+      "iron_pickaxe",
+      "iron_shovel",
+      "netherite_axe",
+      "netherite_hoe",
+      "netherite_pickaxe",
+      "netherite_shovel",
+      "shears",
+      "stone_axe",
+      "stone_hoe",
+      "stone_pickaxe",
+      "stone_shovel",
+      "wooden_axe",
+      "wooden_hoe",
+      "wooden_pickaxe",
+      "wooden_shovel"
+    ],
+    "mining_loot": [
+      "diamond_axe",
+      "diamond_hoe",
+      "diamond_pickaxe",
+      "diamond_shovel",
+      "golden_axe",
+      "golden_hoe",
+      "golden_pickaxe",
+      "golden_shovel",
+      "iron_axe",
+      "iron_hoe",
+      "iron_pickaxe",
+      "iron_shovel",
+      "netherite_axe",
+      "netherite_hoe",
+      "netherite_pickaxe",
+      "netherite_shovel",
+      "stone_axe",
+      "stone_hoe",
+      "stone_pickaxe",
+      "stone_shovel",
+      "wooden_axe",
+      "wooden_hoe",
+      "wooden_pickaxe",
+      "wooden_shovel"
+    ],
+    "sharp_weapon": [
+      "diamond_axe",
+      "diamond_sword",
+      "golden_axe",
+      "golden_sword",
+      "iron_axe",
+      "iron_sword",
+      "netherite_axe",
+      "netherite_sword",
+      "stone_axe",
+      "stone_sword",
+      "wooden_axe",
+      "wooden_sword"
+    ],
+    "sword": [
+      "diamond_sword",
+      "golden_sword",
+      "iron_sword",
+      "netherite_sword",
+      "stone_sword",
+      "wooden_sword"
+    ],
+    "trident": [
+      "trident"
+    ],
+    "vanishing": [
+      "bow",
+      "carrot_on_a_stick",
+      "carved_pumpkin",
+      "chainmail_boots",
+      "chainmail_chestplate",
+      "chainmail_helmet",
+      "chainmail_leggings",
+      "compass",
+      "creeper_head",
+      "crossbow",
+      "diamond_axe",
+      "diamond_boots",
+      "diamond_chestplate",
+      "diamond_helmet",
+      "diamond_hoe",
+      "diamond_leggings",
+      "diamond_pickaxe",
+      "diamond_shovel",
+      "diamond_sword",
+      "dragon_head",
+      "elytra",
+      "fishing_rod",
+      "flint_and_steel",
+      "golden_axe",
+      "golden_boots",
+      "golden_chestplate",
+      "golden_helmet",
+      "golden_hoe",
+      "golden_leggings",
+      "golden_pickaxe",
+      "golden_shovel",
+      "golden_sword",
+      "iron_axe",
+      "iron_boots",
+      "iron_chestplate",
+      "iron_helmet",
+      "iron_hoe",
+      "iron_leggings",
+      "iron_pickaxe",
+      "iron_shovel",
+      "iron_sword",
+      "leather_boots",
+      "leather_chestplate",
+      "leather_helmet",
+      "leather_leggings",
+      "netherite_axe",
+      "netherite_boots",
+      "netherite_chestplate",
+      "netherite_helmet",
+      "netherite_hoe",
+      "netherite_leggings",
+      "netherite_pickaxe",
+      "netherite_shovel",
+      "netherite_sword",
+      "piglin_head",
+      "player_head",
+      "shears",
+      "shield",
+      "skeleton_skull",
+      "stone_axe",
+      "stone_hoe",
+      "stone_pickaxe",
+      "stone_shovel",
+      "stone_sword",
+      "trident",
+      "turtle_helmet",
+      "warped_fungus_on_a_stick",
+      "wither_skeleton_skull",
+      "wooden_axe",
+      "wooden_hoe",
+      "wooden_pickaxe",
+      "wooden_shovel",
+      "wooden_sword",
+      "zombie_head"
+    ],
+    "weapon": [
+      "diamond_axe",
+      "diamond_sword",
+      "golden_axe",
+      "golden_sword",
+      "iron_axe",
+      "iron_sword",
+      "netherite_axe",
+      "netherite_sword",
+      "stone_axe",
+      "stone_sword",
+      "wooden_axe",
+      "wooden_sword"
+    ]
+  },
+  "item_enchantability": {
+    "book": 1,
+    "bow": 1,
+    "carrot_on_a_stick": 1,
+    "carved_pumpkin": 1,
+    "chainmail_boots": 12,
+    "chainmail_chestplate": 12,
+    "chainmail_helmet": 12,
+    "chainmail_leggings": 12,
+    "compass": 1,
+    "creeper_head": 1,
+    "crossbow": 1,
+    "diamond_axe": 10,
+    "diamond_boots": 10,
+    "diamond_chestplate": 10,
+    "diamond_helmet": 10,
+    "diamond_hoe": 10,
+    "diamond_leggings": 10,
+    "diamond_pickaxe": 10,
+    "diamond_shovel": 10,
+    "diamond_sword": 10,
+    "dragon_head": 1,
+    "elytra": 1,
+    "fishing_rod": 1,
+    "flint_and_steel": 1,
+    "golden_axe": 22,
+    "golden_boots": 25,
+    "golden_chestplate": 25,
+    "golden_helmet": 25,
+    "golden_hoe": 22,
+    "golden_leggings": 25,
+    "golden_pickaxe": 22,
+    "golden_shovel": 22,
+    "golden_sword": 22,
+    "iron_axe": 14,
+    "iron_boots": 9,
+    "iron_chestplate": 9,
+    "iron_helmet": 9,
+    "iron_hoe": 14,
+    "iron_leggings": 9,
+    "iron_pickaxe": 14,
+    "iron_shovel": 14,
+    "iron_sword": 14,
+    "leather_boots": 15,
+    "leather_chestplate": 15,
+    "leather_helmet": 15,
+    "leather_leggings": 15,
+    "netherite_axe": 15,
+    "netherite_boots": 15,
+    "netherite_chestplate": 15,
+    "netherite_helmet": 15,
+    "netherite_hoe": 15,
+    "netherite_leggings": 15,
+    "netherite_pickaxe": 15,
+    "netherite_shovel": 15,
+    "netherite_sword": 15,
+    "piglin_head": 1,
+    "player_head": 1,
+    "shears": 1,
+    "shield": 1,
+    "skeleton_skull": 1,
+    "stone_axe": 5,
+    "stone_hoe": 5,
+    "stone_pickaxe": 5,
+    "stone_shovel": 5,
+    "stone_sword": 5,
+    "trident": 1,
+    "turtle_helmet": 9,
+    "warped_fungus_on_a_stick": 1,
+    "wither_skeleton_skull": 1,
+    "wooden_axe": 15,
+    "wooden_hoe": 15,
+    "wooden_pickaxe": 15,
+    "wooden_shovel": 15,
+    "wooden_sword": 15,
+    "zombie_head": 1
+  }
+}
