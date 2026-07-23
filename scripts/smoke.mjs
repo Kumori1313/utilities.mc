@@ -710,20 +710,25 @@ check('ground', 'stronghold count is 3 before 1.9 and 128 from 1.9 on',
   registry.map((v) => [v.label, strongholdsAt(v.label).n]),
   registry.map((v) => [v.label, v.id >= eng.str2mc('1.9') ? 128 : 3]));
 // The first stronghold's position also moves across the boundary — a different ring algorithm,
-// not just more of them. Both sides need Chunkbase.
-check('regression', 'first stronghold before and after 1.9',
+// not just more of them. Both sides confirmed against Chunkbase.
+check('ground', 'first stronghold before and after 1.9',
   [strongholdsAt('1.8.9').first, strongholdsAt('1.9.4').first], [[-92, -732], [-220, -1916]]);
 
 // MC-98995: birch_forest mutates to tall_birch_HILLS in 1.9-1.10 only, reverting to
 // tall_birch_forest at 1.11 (biomes.c getMutated, `mc >= MC_1_9 && mc <= MC_1_10`). A single
 // coordinate therefore shows a two-version window that no version-blind tool can produce, and
 // that a tool applying the mutation to the wrong range would place wrong.
+//
+// NAMING: the engine emits legacy internal names. `tall_birch_forest` is what Chunkbase (and
+// the game since 1.18) calls "Old Growth Birch Forest", and `tall_birch_hills` is "Tall Birch
+// Hills". Same biome ids; Chunkbase just shows the modern label whatever version it simulates.
+// This coordinate was verified on Chunkbase reading those names.
 const biomeStr = (label, x, z) => {
   const v = eng.str2mc(label);
   eng.setWorld(BigInt.asUintN(64, 1n), v, 0);
   return eng.b2s(v, eng.getBiomeAt(1, x, 63, z));
 };
-check('regression', 'MC-98995 birch window at (-352, 992)',
+check('ground', 'MC-98995 birch window at (-352, 992)',
   ['1.8.9', '1.9.4', '1.10.2', '1.11.2'].map((l) => biomeStr(l, -352, 992)),
   ['tall_birch_forest', 'tall_birch_hills', 'tall_birch_hills', 'tall_birch_forest']);
 // And that the window is exactly 1.9-1.10 across the whole list, not merely different at one
@@ -733,29 +738,29 @@ check('ground', 'the birch mutation window is exactly 1.9 through 1.10',
   registry.map((v) => v.id >= eng.str2mc('1.9') && v.id <= eng.str2mc('1.10.2')));
 
 // 1.16: ruined portals arrive at 1.16.1 (config gate). Assert the step over the whole list; the
-// position is one coordinate on the present side, pending Chunkbase.
+// position is one coordinate on the present side, confirmed against Chunkbase.
 check('ground', 'ruined portals are available from 1.16.1 onward and never before',
   registry.map((v) => [v.label, supAt(v.id, 'ruined_portal')]),
   registry.map((v) => [v.label, v.id >= eng.str2mc('1.16.1')]));
-check('regression', 'a ruined portal present from 1.16.1',
+check('ground', 'a ruined portal present from 1.16.1',
   ['1.15.2', '1.16.1', '1.16.5', '1.17.1'].map((l) => hasAt(eng.str2mc(l), 0, 'ruined_portal', 304, 288)),
   [false, true, true, true]);
 
 // 1.16: the shipwreck region grid grew 16x8 -> 24x20, so a coordinate can move OUT of the
 // generated set and another can move IN across the same boundary — the resize signature, and
 // the sharpest 1.16 test because it flips in both directions. Both coordinates are stable on
-// their respective sides (checked 1.13.2-1.15.2 and 1.16.1-1.17.1). Pending Chunkbase.
+// their respective sides (checked 1.13.2-1.15.2 and 1.16.1-1.17.1) and confirmed on Chunkbase.
 const V152 = eng.str2mc('1.15.2'), V161 = eng.str2mc('1.16.1');
-check('regression', 'a shipwreck the 1.16 resize moves out of the grid',
+check('ground', 'a shipwreck the 1.16 resize moves out of the grid',
   [hasAt(V152, 0, 'shipwreck', 48, 16), hasAt(V161, 0, 'shipwreck', 48, 16)], [true, false]);
-check('regression', 'a shipwreck the 1.16 resize moves into the grid',
+check('ground', 'a shipwreck the 1.16 resize moves into the grid',
   [hasAt(V152, 0, 'shipwreck', -288, 176), hasAt(V161, 0, 'shipwreck', -288, 176)], [false, true]);
 // The control has to be a DIFFERENT type: the shipwreck resize reshuffles the field so
 // completely that no shipwreck survives the boundary, so a same-type control is impossible. A
 // monument (whose config does not change at 1.16) that stays put proves the version reaches the
 // generator correctly for a type that should not move — ruling out a tool that shifts positions
 // by the wrong rule, which the two shipwreck flips alone would not catch. Stable 1.13.2-1.17.1.
-check('regression', 'a monument unchanged across the 1.16 boundary (cross-type control)',
+check('ground', 'a monument unchanged across the 1.16 boundary (cross-type control)',
   [hasAt(V152, 0, 'monument', -960, -288), hasAt(V161, 0, 'monument', -960, -288)], [true, true]);
 
 // --- draw depth / cave biomes ---

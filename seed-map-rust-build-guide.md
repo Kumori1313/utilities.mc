@@ -1560,7 +1560,7 @@ portals report as available at 1.8.9, and both shipwreck flips collapse to a con
 
 - [x] **Structural / code-derived claims are ground truth**: the stronghold count step, the
       ruined-portal availability step, and the exact 1.9–1.10 span of the birch window.
-- [ ] **Coordinate-level claims pending Chunkbase** (regression until then):
+- [x] **Coordinate-level claims confirmed against Chunkbase** — all six now ground truth:
       | boundary | coordinate | claim |
       |---|---|---|
       | 1.9 | first stronghold | `(-92, -732)` on 1.8.9, `(-220, -1916)` on 1.9.4 |
@@ -1569,6 +1569,12 @@ portals report as available at 1.8.9, and both shipwreck flips collapse to a con
       | 1.16 | `(48, 16)` | shipwreck present 1.13.2–1.15.2, gone at 1.16.1 (resize out) |
       | 1.16 | `(-288, 176)` | shipwreck absent ≤1.15.2, present ≥1.16.1 (resize in) |
       | 1.16 | `(-960, -288)` | monument unchanged across the boundary (cross-type control) |
+- [x] **Biome naming carries a version-dependent rename.** The engine emits legacy internal
+      names, so the birch window verifies on Chunkbase as **Tall Birch Hills** (1.9–1.10) and
+      **Old Growth Birch Forest** (1.8.9, 1.11+) — the latter renamed from "Tall Birch Forest"
+      in 1.18. `biome2str` still returns `tall_birch_forest`; same id, modern label on Chunkbase
+      regardless of simulated version. Recorded in the smoke comment so the mismatch doesn't read
+      as a bug on a future re-check.
 
 **Where this leaves per-version structure coverage.** Verified or code-pinned across versions:
 outposts, desert pyramids, fortresses/bastions, End cities and gateways, plus the 1.9 and 1.16
