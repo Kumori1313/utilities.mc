@@ -22,7 +22,7 @@
 //! small inputs in the tests.
 
 use crate::anvil::book_cost_multiplier;
-use crate::data::ENCHANTMENTS;
+use crate::data::EnchantmentData;
 
 /// Above this many enchantments the 3^n DP is too large; callers should cap selection. (A
 /// real item has far fewer applicable enchantments than this.)
@@ -34,8 +34,8 @@ fn penalty(w: u32) -> i32 {
 }
 
 /// One book's contribution when it is on the sacrifice side: level x book multiplier.
-fn book_cost(idx: usize, level: i32) -> i32 {
-    level * book_cost_multiplier(ENCHANTMENTS[idx].anvil_cost)
+fn book_cost(table: &[EnchantmentData], idx: usize, level: i32) -> i32 {
+    level * book_cost_multiplier(table[idx].anvil_cost)
 }
 
 /// A node in a combining tree: the tool, a single book, or an anvil operation (target then
@@ -98,7 +98,11 @@ pub struct Plan {
 ///
 /// Returns `None` if there are more than [`MAX_ENCHANTS`] enchantments. Zero enchantments
 /// yields an empty, zero-cost plan.
-pub fn optimal_plan(enchants: &[(usize, i32)], tool_prior_work: u32) -> Option<Plan> {
+pub fn optimal_plan(
+    table: &[EnchantmentData],
+    enchants: &[(usize, i32)],
+    tool_prior_work: u32,
+) -> Option<Plan> {
     let n = enchants.len();
     if n > MAX_ENCHANTS {
         return None;
@@ -116,8 +120,8 @@ pub fn optimal_plan(enchants: &[(usize, i32)], tool_prior_work: u32) -> Option<P
     let mut sum_ench = vec![0i32; 1 << n];
     for mask in 1..=full {
         let low = mask.trailing_zeros() as usize;
-        sum_ench[mask as usize] =
-            sum_ench[(mask & (mask - 1)) as usize] + book_cost(enchants[low].0, enchants[low].1);
+        sum_ench[mask as usize] = sum_ench[(mask & (mask - 1)) as usize]
+            + book_cost(table, enchants[low].0, enchants[low].1);
     }
 
     // dp_pile[mask]: Pareto frontier of ways to combine exactly `mask`'s books into a book.
@@ -183,7 +187,7 @@ pub fn optimal_plan(enchants: &[(usize, i32)], tool_prior_work: u32) -> Option<P
 
     let best = dp_tool[full as usize].iter().min_by_key(|nd| nd.cost)?;
     let mut steps = Vec::new();
-    reconstruct(&best.tree, enchants, &mut steps);
+    reconstruct(table, &best.tree, enchants, &mut steps);
     let max_step = steps.iter().map(|s| s.cost).max().unwrap_or(0);
     Some(Plan {
         total: best.cost,
@@ -212,12 +216,18 @@ fn combine_piles(dp: &mut [Vec<Node>], sum_ench: &[i32], mask: u32, a: u32, b: u
 }
 
 /// Post-order walk: emit a step for every Merge, children before parents.
-fn reconstruct(tree: &Tree, enchants: &[(usize, i32)], out: &mut Vec<Step>) {
+fn reconstruct(
+    table: &[EnchantmentData],
+    tree: &Tree,
+    enchants: &[(usize, i32)],
+    out: &mut Vec<Step>,
+) {
     if let Tree::Merge(target, sacrifice) = tree {
-        reconstruct(target, enchants, out);
-        reconstruct(sacrifice, enchants, out);
-        let cost =
-            penalty(work_of(target)) + penalty(work_of(sacrifice)) + sac_sum(sacrifice, enchants);
+        reconstruct(table, target, enchants, out);
+        reconstruct(table, sacrifice, enchants, out);
+        let cost = penalty(work_of(target))
+            + penalty(work_of(sacrifice))
+            + sac_sum(table, sacrifice, enchants);
         out.push(Step {
             target: leaves(target).iter().map(|&i| enchants[i].0).collect(),
             sacrifice: leaves(sacrifice).iter().map(|&i| enchants[i].0).collect(),
@@ -254,9 +264,9 @@ fn work_of(tree: &Tree) -> u32 {
     }
 }
 
-fn sac_sum(tree: &Tree, enchants: &[(usize, i32)]) -> i32 {
+fn sac_sum(table: &[EnchantmentData], tree: &Tree, enchants: &[(usize, i32)]) -> i32 {
     leaves(tree)
         .iter()
-        .map(|&i| book_cost(enchants[i].0, enchants[i].1))
+        .map(|&i| book_cost(table, enchants[i].0, enchants[i].1))
         .sum()
 }

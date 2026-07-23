@@ -1181,30 +1181,43 @@ its job rather than a gap.
 
 The bulk of the work, and it is transcription plus codegen rather than algorithms.
 
-- [ ] **One dataset file per version**, each carrying its own `_provenance` block exactly as the
-      current file does. `build.rs` globs the data directory instead of naming one file, and emits
-      one table module per version plus a lookup from version string to table.
-- [ ] **Landmine — `ENCHANTMENTS` is a fixed-size `[EnchantmentData; 42]`.** That count is
-      1.21.3's. It must become a slice (`&'static [EnchantmentData]`) before a second version can
-      exist, and every consumer that assumed a fixed length or a compile-time-known index follows.
-- [ ] **Landmine — enchantment indices are version-scoped, and nothing in the type system says
-      so.** `exclusive_with` is `&[usize]` into *its own* table; `index_of` returns a position in
-      *a* table; `optimal_plan` takes `(usize, i32)` pairs. Mix an index resolved under one
-      version with a table from another and you get a real enchantment with the wrong identity —
-      no error, just a wrong answer. Resolve names to indices once per request, against the
-      selected version's table, and never cache an index across a version change. The UI already
-      keys its selection map by **name**, which is the right shape; keep it that way.
-- [ ] Make the version an explicit parameter of the public surface (`offered_levels`,
-      `enchantments_in_slot`, `enchant_applicable`, `anvil_optimize`, …) rather than a mutable
-      global. A global "current version" invites exactly the cross-version index bug above, and
-      makes the crate's tests order-dependent.
+**Status — the architecture is done; the data is the remaining half.** The codegen, the
+version-scoped registry, and the whole call surface (core → wasm → UI) are multi-version and
+every test is green. What is NOT done, because it is human-blocked, is adding a *second dataset*:
+the 10.2 rule (two independent transcriptions) and per-version golden vectors from a matching JDK
+cannot be produced here. So the machinery carries exactly one version (1.21.3) today, and adding
+another is now a pure-data operation — drop a `data/enchantments-<ver>.json` file with its
+`_provenance` block and it appears in the registry and the UI picker with no code change. The
+`predict`/`anvil` example CLIs generate cross-reference output for that verification.
+
+- [x] **One dataset file per version.** `build.rs` globs `data/enchantments-*.json`, emits one
+      statics block per file, and orders them newest-first into a `TABLES` array with a
+      `table(version)` / `default_table()` / `versions()` lookup. Duplicate version strings are
+      rejected at build time.
+- [x] **`ENCHANTMENTS` is no longer a fixed-size array or a global.** It is now
+      `VersionTable::enchantments: &'static [EnchantmentData]`, reached only through a resolved
+      table. Every consumer (`enchant`, `anvil`, `optimize`) takes the slice or the table
+      explicitly; nothing reads a version-global static.
+- [x] **Enchantment indices are version-scoped, and the API now forces the scope.** Every
+      index-taking function (`enchantments_in_slot`, `combine`, `optimal_plan`, `Roll::name`/`data`)
+      takes the table or its slice as an explicit argument; `index_of`/`get`/`enchantability` are
+      methods on `VersionTable`. The wasm layer resolves the table **once per call** from the
+      version string and never caches an index across the boundary. The UI keys its selection map
+      by name, as before — so a version switch re-resolves through the new table rather than
+      reusing a stale index.
+- [x] **Version is an explicit parameter of the public surface**, not a mutable global. Every
+      `#[wasm_bindgen]` binding that touches the table takes `version: &str` first and resolves it
+      (`enchant_slot`, `enchant_applicable`, `anvil_combine`, `anvil_optimize`, `enchant_names`,
+      `enchant_conflicts`, `enchant_max_level`, `enchant_table_items`, `anvil_items`). `offered_levels`
+      is the one exception — pure xp-seed RNG with no table — left version-free pending the 13.4
+      audit, with a comment marking where to thread version if that audit finds a difference.
 - [ ] **Landmine — a second dataset is a second chance to make transcription errors, with no
       cross-check.** Part 10.2's rule (two independent transcriptions, diffed) was what caught the
       original errors; it applies per version. Do not hand-edit a copy of the 1.21.3 file into a
       new version — that produces a file that looks plausible and shares every one of the original's
-      mistakes while adding new ones.
+      mistakes while adding new ones. **Still open — this is the human-blocked half.**
 - [ ] Generate golden vectors per version from a JDK matching **that** version, per 10.5. Vectors
-      from one version do not validate another.
+      from one version do not validate another. **Still open.**
 
 ## 13.4 — Version-dependent logic, not just data
 
@@ -1234,21 +1247,25 @@ version-independent merely because it currently passes for 1.21.3.
 
 ## 13.5 — UI wiring, state migration, and verification
 
-- [ ] **Surface the active version in each tool**, replacing the single global `MC_VERSION`
-      readout. A user cross-checking against a wiki needs to know which version's rules produced
-      the number in front of them.
-- [ ] **Landmine — selected state may not exist in the newly chosen version.** Switching versions
-      can strand a selected item or enchantment that the target version never had (or that was
-      removed from it). The item and enchantment dropdowns are already generated from the data, so
-      they will re-render correctly on their own — the failure is the *retained selection* behind
-      them. Drop what no longer applies and say so, rather than silently computing against a
-      substitute. The anvil grid already drops selections that do not apply to the chosen item;
-      extend that same pass to a version change.
-- [ ] Default to the newest version both halves support, so the common case needs no interaction.
+- [x] **The active version is surfaced as a picker in the enchant tab**, built from
+      `enchant_versions()` and defaulting to `enchant_default_version()`. It is deliberately
+      separate from the seed map's version — the two halves version independently (13.1), and only
+      versions with a transcribed table can appear here. The old "fixed to X, does not follow the
+      map" copy is replaced with a version selector and an honest coverage line (how many tables
+      are carried).
+- [x] **Selected state that the new version lacks is dropped, not silently substituted.** On a
+      version change the item lists rebuild (`populateItems`) and fall back to a default if the
+      held item is gone; the anvil grid's existing "drop selections not applicable to the item"
+      pass now runs against the new version's applicable set, so a stranded enchantment
+      disappears; and the conflict cache is cleared because conflicts are version-scoped.
+- [x] **Defaults to the newest carried version** (`TABLES[0]`), so the common case needs no
+      interaction.
 - [ ] **Verify per version, not once.** Every claim in Parts 8 and 10 is a claim about one
       version. Re-run the Chunkbase spot-checks, the external enchantment-calculator comparison,
       and the real-anvil check against each version you offer, and treat any version you have not
-      checked as unverified — including in the UI, if you ship it anyway.
+      checked as unverified — including in the UI, if you ship it anyway. **Still open, and moot
+      until a second dataset exists — with one carried version the existing 1.21.3 verification
+      already covers it.**
 
 ## 13.6 — Swapping the engine vendor (done: Cubitect → xpple)
 

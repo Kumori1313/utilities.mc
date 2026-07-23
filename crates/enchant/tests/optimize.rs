@@ -3,17 +3,24 @@
 //! The DP is cross-checked against an independent brute-force reference (exhaustive over all
 //! combining orders) for small inputs, so "optimal" is verified, not asserted. Plus a few
 //! hand-computed values that also match the in-game numbers cross-checked earlier.
+//!
+//! Run against the default version's table (Part 13.3), passed explicitly to the optimiser.
 
-use enchant::ENCHANTMENTS;
 use enchant::anvil::book_cost_multiplier;
-use enchant::data::index_of;
+use enchant::data::EnchantmentData;
+use enchant::default_table;
 use enchant::optimize::optimal_plan;
 
+/// The default table's enchantment slice — every optimal_plan call is scoped to it.
+fn ench() -> &'static [EnchantmentData] {
+    default_table().enchantments
+}
+
 fn ix(name: &str) -> usize {
-    index_of(name).unwrap()
+    default_table().index_of(name).unwrap()
 }
 fn book_cost(idx: usize, level: i32) -> i32 {
-    level * book_cost_multiplier(ENCHANTMENTS[idx].anvil_cost)
+    level * book_cost_multiplier(ench()[idx].anvil_cost)
 }
 fn penalty(w: u32) -> i32 {
     (1i64 << w) as i32 - 1
@@ -71,9 +78,9 @@ fn brute_optimal(en: &[(usize, i32)], tool_pw: u32) -> i32 {
 
 #[test]
 fn empty_and_single() {
-    assert_eq!(optimal_plan(&[], 0).unwrap().total, 0);
+    assert_eq!(optimal_plan(ench(), &[], 0).unwrap().total, 0);
     // Fortune III book onto a blank tool: 3 * bookMult(anvil_cost 4)=2 => 6.
-    let one = optimal_plan(&[(ix("fortune"), 3)], 0).unwrap();
+    let one = optimal_plan(ench(), &[(ix("fortune"), 3)], 0).unwrap();
     assert_eq!(one.total, 6);
     assert_eq!(one.steps.len(), 1);
     assert!(one.steps[0].onto_tool);
@@ -84,7 +91,7 @@ fn empty_and_single() {
 #[test]
 fn fortune_unbreaking_pair_is_ten() {
     let en = [(ix("fortune"), 3), (ix("unbreaking"), 3)];
-    let plan = optimal_plan(&en, 0).unwrap();
+    let plan = optimal_plan(ench(), &en, 0).unwrap();
     assert_eq!(plan.total, 10);
     assert_eq!(plan.total, brute_optimal(&en, 0));
 }
@@ -94,7 +101,12 @@ fn fortune_unbreaking_pair_is_ten() {
 #[test]
 fn tool_prior_work_is_charged() {
     // Fortune III onto a tool worked twice: penalty(2) + fortune 6 = 3 + 6 = 9.
-    assert_eq!(optimal_plan(&[(ix("fortune"), 3)], 2).unwrap().total, 9);
+    assert_eq!(
+        optimal_plan(ench(), &[(ix("fortune"), 3)], 2)
+            .unwrap()
+            .total,
+        9
+    );
     let en = [
         (ix("sharpness"), 5),
         (ix("unbreaking"), 3),
@@ -102,7 +114,7 @@ fn tool_prior_work_is_charged() {
     ];
     for pw in 0..4 {
         assert_eq!(
-            optimal_plan(&en, pw).unwrap().total,
+            optimal_plan(ench(), &en, pw).unwrap().total,
             brute_optimal(&en, pw),
             "pw={pw}"
         );
@@ -131,13 +143,13 @@ fn dp_matches_brute_force() {
             .filter(|k| combo & (1 << k) != 0)
             .map(|k| (ix(pool[k].0), pool[k].1))
             .collect();
-        let plan = optimal_plan(&en, 0).unwrap();
+        let plan = optimal_plan(ench(), &en, 0).unwrap();
         assert_eq!(
             plan.total,
             brute_optimal(&en, 0),
             "DP != brute for {:?}",
             en.iter()
-                .map(|&(i, l)| (ENCHANTMENTS[i].name, l))
+                .map(|&(i, l)| (ench()[i].name, l))
                 .collect::<Vec<_>>()
         );
     }
@@ -153,7 +165,7 @@ fn steps_are_consistent_with_total() {
         (ix("mending"), 1),
         (ix("looting"), 3),
     ];
-    let plan = optimal_plan(&en, 0).unwrap();
+    let plan = optimal_plan(ench(), &en, 0).unwrap();
     assert_eq!(plan.total, plan.steps.iter().map(|s| s.cost).sum::<i32>());
     assert_eq!(
         plan.max_step,
@@ -169,5 +181,5 @@ fn steps_are_consistent_with_total() {
 #[test]
 fn respects_the_enchant_cap() {
     let many: Vec<(usize, i32)> = (0..13).map(|_| (ix("unbreaking"), 3)).collect();
-    assert!(optimal_plan(&many, 0).is_none());
+    assert!(optimal_plan(ench(), &many, 0).is_none());
 }

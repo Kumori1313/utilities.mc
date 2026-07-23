@@ -6,43 +6,69 @@
 //! just splits on newlines.
 
 use enchant::anvil::{AnvilItem, TOO_EXPENSIVE_LIMIT, combine};
-use enchant::data::index_of;
+use enchant::data::VersionTable;
 use enchant::optimize::optimal_plan;
-use enchant::{ENCHANTMENTS, MC_VERSION, enchantability, enchantments_in_slot, offered_levels};
+use enchant::{default_table, enchantments_in_slot, offered_levels, table, versions};
 use wasm_bindgen::prelude::*;
 
-/// Version the tables encode, for the UI to display.
-#[wasm_bindgen]
-pub fn enchant_version() -> String {
-    MC_VERSION.to_string()
+/// Resolve a version string to its table, falling back to the newest if the string is not
+/// one this crate carries. Enchantment indices are version-scoped (Part 13.3), so EVERY
+/// binding resolves the table once here and never mixes indices across a version change.
+fn resolve(version: &str) -> &'static VersionTable {
+    table(version).unwrap_or_else(default_table)
 }
 
-/// Every enchantment name, for populating dropdowns.
+/// Every enchantment version this calculator carries, newest first. The enchant tab builds
+/// its own picker from this — deliberately independent of the seed map's version list, since
+/// the two halves support different sets of versions (Part 13.1).
 #[wasm_bindgen]
-pub fn enchant_names() -> Vec<String> {
-    ENCHANTMENTS.iter().map(|e| e.name.to_string()).collect()
+pub fn enchant_versions() -> Vec<String> {
+    versions().iter().map(|v| v.to_string()).collect()
+}
+
+/// The newest version this calculator carries — the default selection.
+#[wasm_bindgen]
+pub fn enchant_default_version() -> String {
+    default_table().mc_version.to_string()
+}
+
+/// Every enchantment name in `version`, for populating dropdowns.
+#[wasm_bindgen]
+pub fn enchant_names(version: &str) -> Vec<String> {
+    resolve(version)
+        .enchantments
+        .iter()
+        .map(|e| e.name.to_string())
+        .collect()
 }
 
 /// The three offered levels (green numbers) for an xp seed and bookshelf count.
+///
+/// Not version-parameterised: the offered-level formula is pure xp-seed RNG with no table
+/// dependency, and is currently believed identical across the offered range. That belief is
+/// the 13.4 audit's to confirm; when a version-dependent case is found, thread `version`
+/// through here as the other bindings already do.
 #[wasm_bindgen]
 pub fn enchant_offered_levels(xp_seed: i32, bookshelves: i32) -> Vec<i32> {
     offered_levels(xp_seed, bookshelves).to_vec()
 }
 
-/// Enchantments a slot would roll, as `"name level"` lines. Empty string if the item is
-/// unknown or the slot rolls nothing.
+/// Enchantments a slot would roll under `version`, as `"name level"` lines. Empty string if
+/// the item is unknown or the slot rolls nothing.
 #[wasm_bindgen]
-pub fn enchant_slot(xp_seed: i32, slot: usize, item: &str, level: i32) -> String {
-    enchantments_in_slot(xp_seed, slot, item, level)
+pub fn enchant_slot(version: &str, xp_seed: i32, slot: usize, item: &str, level: i32) -> String {
+    let t = resolve(version);
+    enchantments_in_slot(t, xp_seed, slot, item, level)
         .iter()
-        .map(|r| format!("{} {}", r.name(), r.level))
+        .map(|r| format!("{} {}", r.name(t), r.level))
         .collect::<Vec<_>>()
         .join("\n")
 }
 
-/// Parse `"fortune=3,unbreaking=3"` into anvil enchantment pairs. Unknown names are
-/// skipped rather than failing the whole call, so a typo degrades gracefully.
-fn parse_ench(spec: &str) -> Vec<(usize, i32)> {
+/// Parse `"fortune=3,unbreaking=3"` into anvil enchantment pairs, resolving names against
+/// `table`. Unknown names are skipped rather than failing the whole call, so a typo degrades
+/// gracefully — and a name that does not exist in the selected version is simply dropped.
+fn parse_ench(table: &VersionTable, spec: &str) -> Vec<(usize, i32)> {
     spec.split(',')
         .filter_map(|part| {
             let part = part.trim();
@@ -50,7 +76,7 @@ fn parse_ench(spec: &str) -> Vec<(usize, i32)> {
                 return None;
             }
             let (name, lvl) = part.split_once('=')?;
-            let idx = index_of(name.trim())?;
+            let idx = table.index_of(name.trim())?;
             let level = lvl.trim().parse().ok()?;
             Some((idx, level))
         })
@@ -95,6 +121,7 @@ impl AnvilOutcome {
 /// `"book"` as an item id for a book.
 #[wasm_bindgen]
 pub fn anvil_combine(
+    version: &str,
     target_item: &str,
     target_pw: u32,
     target_ench: &str,
@@ -103,16 +130,17 @@ pub fn anvil_combine(
     sac_ench: &str,
     rename: bool,
 ) -> AnvilOutcome {
-    let target = AnvilItem::new(target_item, target_pw, parse_ench(target_ench));
-    let sacrifice = AnvilItem::new(sac_item, sac_pw, parse_ench(sac_ench));
-    let r = combine(&target, &sacrifice, rename);
+    let t = resolve(version);
+    let target = AnvilItem::new(target_item, target_pw, parse_ench(t, target_ench));
+    let sacrifice = AnvilItem::new(sac_item, sac_pw, parse_ench(t, sac_ench));
+    let r = combine(t.enchantments, &target, &sacrifice, rename);
     AnvilOutcome {
         cost: r.cost,
         too_expensive: r.too_expensive,
         result: r
             .result
             .iter()
-            .map(|&(i, l)| format!("{} {l}", ENCHANTMENTS[i].name))
+            .map(|&(i, l)| format!("{} {l}", t.get(i).name))
             .collect::<Vec<_>>()
             .join("\n"),
         next_prior_work: r.result_prior_work,
@@ -125,9 +153,10 @@ pub fn anvil_combine(
 /// enchantment; any other item accepts those whose `supported_items` include it (broader
 /// than the table's primary set: e.g. sharpness applies to axes as well as swords).
 #[wasm_bindgen]
-pub fn enchant_applicable(item: &str) -> Vec<String> {
+pub fn enchant_applicable(version: &str, item: &str) -> Vec<String> {
     let is_book = item == "book" || item == "enchanted_book";
-    ENCHANTMENTS
+    resolve(version)
+        .enchantments
         .iter()
         .filter(|e| is_book || e.supported_items.contains(&item))
         .map(|e| e.name.to_string())
@@ -190,7 +219,10 @@ fn kind_of(item: &str) -> &str {
 }
 
 fn kind_rank(kind: &str) -> usize {
-    KIND_ORDER.iter().position(|k| *k == kind).unwrap_or(usize::MAX)
+    KIND_ORDER
+        .iter()
+        .position(|k| *k == kind)
+        .unwrap_or(usize::MAX)
 }
 
 fn material_rank(item: &str) -> usize {
@@ -200,11 +232,11 @@ fn material_rank(item: &str) -> usize {
         .unwrap_or(if item == "turtle_helmet" { 8 } else { 0 })
 }
 
-/// Every enchantable item, ordered by kind then material. Books accept any enchantment but
-/// are not listed in any `supported_items`, so they are added explicitly.
-fn all_items() -> Vec<&'static str> {
+/// Every enchantable item in `table`, ordered by kind then material. Books accept any
+/// enchantment but are not listed in any `supported_items`, so they are added explicitly.
+fn all_items(table: &VersionTable) -> Vec<&'static str> {
     let mut v: Vec<&'static str> = vec!["book"];
-    for e in &ENCHANTMENTS {
+    for e in table.enchantments {
         for &i in e.supported_items {
             if !v.contains(&i) {
                 v.push(i);
@@ -220,13 +252,14 @@ fn all_items() -> Vec<&'static str> {
 /// one are genuinely different questions. Items a table cannot enchant (mob heads, compasses
 /// — anvil-only curse carriers) are excluded.
 #[wasm_bindgen]
-pub fn enchant_table_items() -> Vec<String> {
-    all_items()
+pub fn enchant_table_items(version: &str) -> Vec<String> {
+    let t = resolve(version);
+    all_items(t)
         .into_iter()
         .filter(|i| {
-            enchantability(i).is_some()
+            t.enchantability(i).is_some()
                 && (*i == "book"
-                    || ENCHANTMENTS
+                    || t.enchantments
                         .iter()
                         .any(|e| e.in_enchanting_table && e.supported_items.contains(i)))
         })
@@ -239,10 +272,10 @@ pub fn enchant_table_items() -> Vec<String> {
 /// a kind, and cost depends only on the enchantments and prior work — so listing the variants
 /// would offer several ways to pick the same thing.
 #[wasm_bindgen]
-pub fn anvil_items() -> Vec<String> {
+pub fn anvil_items(version: &str) -> Vec<String> {
     let mut seen: Vec<&str> = Vec::new();
     let mut out = Vec::new();
-    for i in all_items() {
+    for i in all_items(resolve(version)) {
         let k = kind_of(i);
         if !seen.contains(&k) {
             seen.push(k);
@@ -252,21 +285,24 @@ pub fn anvil_items() -> Vec<String> {
     out
 }
 
-/// Max level of an enchantment (number of tier columns to enable in the grid).
+/// Max level of an enchantment in `version` (number of tier columns to enable in the grid).
 #[wasm_bindgen]
-pub fn enchant_max_level(name: &str) -> i32 {
-    index_of(name).map(|i| ENCHANTMENTS[i].max_level).unwrap_or(0)
+pub fn enchant_max_level(version: &str, name: &str) -> i32 {
+    let t = resolve(version);
+    t.index_of(name).map(|i| t.get(i).max_level).unwrap_or(0)
 }
 
-/// Names that conflict with `name` (mutually exclusive). Selecting one disables these in the
-/// grid unless the bypass toggle is on.
+/// Names that conflict with `name` in `version` (mutually exclusive). Selecting one disables
+/// these in the grid unless the bypass toggle is on.
 #[wasm_bindgen]
-pub fn enchant_conflicts(name: &str) -> Vec<String> {
-    match index_of(name) {
-        Some(i) => ENCHANTMENTS[i]
+pub fn enchant_conflicts(version: &str, name: &str) -> Vec<String> {
+    let t = resolve(version);
+    match t.index_of(name) {
+        Some(i) => t
+            .get(i)
             .exclusive_with
             .iter()
-            .map(|&j| ENCHANTMENTS[j].name.to_string())
+            .map(|&j| t.get(j).name.to_string())
             .collect(),
         None => Vec::new(),
     }
@@ -311,15 +347,22 @@ impl OptimizePlan {
 /// they only affect cost through the prior-work count. Returns null if the enchantment count
 /// exceeds the solver's cap.
 #[wasm_bindgen]
-pub fn anvil_optimize(new_ench: &str, tool_prior_work: u32) -> Option<OptimizePlan> {
-    let ench = parse_ench(new_ench);
+pub fn anvil_optimize(version: &str, new_ench: &str, tool_prior_work: u32) -> Option<OptimizePlan> {
+    let t = resolve(version);
+    let ench = parse_ench(t, new_ench);
     let level_of: std::collections::HashMap<usize, i32> = ench.iter().copied().collect();
-    let plan = optimal_plan(&ench, tool_prior_work)?;
+    let plan = optimal_plan(t.enchantments, &ench, tool_prior_work)?;
 
     // "fortune 3, unbreaking 3" for a set of enchantment indices.
     let label = |ids: &[usize]| -> String {
         ids.iter()
-            .map(|&i| format!("{} {}", ENCHANTMENTS[i].name, level_of.get(&i).copied().unwrap_or(0)))
+            .map(|&i| {
+                format!(
+                    "{} {}",
+                    t.get(i).name,
+                    level_of.get(&i).copied().unwrap_or(0)
+                )
+            })
             .collect::<Vec<_>>()
             .join(", ")
     };
@@ -328,7 +371,11 @@ pub fn anvil_optimize(new_ench: &str, tool_prior_work: u32) -> Option<OptimizePl
         .iter()
         .map(|s| {
             let target = if s.onto_tool {
-                if s.target.is_empty() { "tool".to_string() } else { format!("tool [{}]", label(&s.target)) }
+                if s.target.is_empty() {
+                    "tool".to_string()
+                } else {
+                    format!("tool [{}]", label(&s.target))
+                }
             } else {
                 format!("book [{}]", label(&s.target))
             };

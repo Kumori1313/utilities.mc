@@ -5,9 +5,11 @@
 //! enchantments together) but they CANNOT confirm that the specific enchantments
 //! predicted for a given xp seed are what the game produces. Only 10.5's captured
 //! vectors can do that.
+//!
+//! All of these run against the default (newest) version's table (Part 13.3). The table is
+//! passed explicitly rather than read from a global, matching the multi-version API.
 
-use enchant::data::{ENCHANTMENTS, ITEM_ENCHANTABILITY, index_of};
-use enchant::{MC_VERSION, enchantability, enchantments_in_slot, offered_levels};
+use enchant::{MC_VERSION, default_table, enchantments_in_slot, offered_levels};
 
 const SEEDS: i32 = 20_000;
 const ITEMS: &[&str] = &[
@@ -27,44 +29,47 @@ const ITEMS: &[&str] = &[
 
 #[test]
 fn data_table_is_sane() {
+    let t = default_table();
     assert_eq!(MC_VERSION, "1.21.3");
-    assert_eq!(ENCHANTMENTS.len(), 42, "1.21.3 has 42 enchantments");
+    assert_eq!(t.enchantments.len(), 42, "1.21.3 has 42 enchantments");
     // `enchantability()` binary-searches, which requires sorted keys.
     assert!(
-        ITEM_ENCHANTABILITY.windows(2).all(|w| w[0].0 < w[1].0),
-        "ITEM_ENCHANTABILITY must be sorted for binary search"
+        t.item_enchantability.windows(2).all(|w| w[0].0 < w[1].0),
+        "item_enchantability must be sorted for binary search"
     );
-    assert_eq!(enchantability("golden_sword"), Some(22));
-    assert_eq!(enchantability("diamond_sword"), Some(10));
-    assert_eq!(enchantability("book"), Some(1));
-    assert_eq!(enchantability("not_a_real_item"), None);
+    assert_eq!(t.enchantability("golden_sword"), Some(22));
+    assert_eq!(t.enchantability("diamond_sword"), Some(10));
+    assert_eq!(t.enchantability("book"), Some(1));
+    assert_eq!(t.enchantability("not_a_real_item"), None);
 }
 
 /// Exclusivity is stored as a symmetric closure; verify that actually holds, since the
 /// roll's filtering checks only one direction per pair.
 #[test]
 fn exclusivity_is_symmetric() {
-    for (i, e) in ENCHANTMENTS.iter().enumerate() {
+    let t = default_table();
+    for (i, e) in t.enchantments.iter().enumerate() {
         for &j in e.exclusive_with {
             assert!(
-                ENCHANTMENTS[j].exclusive_with.contains(&i),
+                t.get(j).exclusive_with.contains(&i),
                 "{} excludes {} but not vice versa",
                 e.name,
-                ENCHANTMENTS[j].name
+                t.get(j).name
             );
         }
     }
     // Spot-check a pair the one-directional source data would have gotten wrong.
     let (ch, rip) = (
-        index_of("channeling").unwrap(),
-        index_of("riptide").unwrap(),
+        t.index_of("channeling").unwrap(),
+        t.index_of("riptide").unwrap(),
     );
-    assert!(ENCHANTMENTS[ch].exclusive_with.contains(&rip));
-    assert!(ENCHANTMENTS[rip].exclusive_with.contains(&ch));
+    assert!(t.get(ch).exclusive_with.contains(&rip));
+    assert!(t.get(rip).exclusive_with.contains(&ch));
 }
 
 #[test]
 fn rolls_are_always_structurally_valid() {
+    let t = default_table();
     let mut total = 0usize;
     for item in ITEMS {
         for s in 0..SEEDS {
@@ -73,10 +78,10 @@ fn rolls_are_always_structurally_valid() {
                 if lv == 0 {
                     continue;
                 }
-                let rolls = enchantments_in_slot(s, slot, item, lv);
+                let rolls = enchantments_in_slot(t, s, slot, item, lv);
                 total += rolls.len();
                 for (n, r) in rolls.iter().enumerate() {
-                    let d = r.data();
+                    let d = r.data(t);
                     // Books are exempt: they accept any table enchantment regardless of
                     // item tags, so `applies_to` legitimately fails for them.
                     assert!(
@@ -102,7 +107,7 @@ fn rolls_are_always_structurally_valid() {
                             !d.exclusive_with.contains(&other.enchantment),
                             "seed {s}: {} and {} are mutually exclusive",
                             d.name,
-                            other.name()
+                            other.name(t)
                         );
                     }
                 }
@@ -120,6 +125,7 @@ fn rolls_are_always_structurally_valid() {
 /// which is exactly the bug this pins.
 #[test]
 fn table_never_rolls_non_table_enchantments() {
+    let t = default_table();
     let banned: Vec<usize> = [
         "mending",
         "frost_walker",
@@ -130,24 +136,27 @@ fn table_never_rolls_non_table_enchantments() {
         "vanishing_curse",
     ]
     .iter()
-    .map(|n| index_of(n).unwrap_or_else(|| panic!("{n} missing from table")))
+    .map(|n| {
+        t.index_of(n)
+            .unwrap_or_else(|| panic!("{n} missing from table"))
+    })
     .collect();
 
     for item in ITEMS {
         for s in 0..SEEDS {
             for slot in 0..3 {
-                for r in enchantments_in_slot(s, slot, item, 30) {
+                for r in enchantments_in_slot(t, s, slot, item, 30) {
                     assert!(
                         !banned.contains(&r.enchantment),
                         "seed {s} slot {slot} {item}: rolled {} from a table",
-                        r.name()
+                        r.name(t)
                     );
                 }
             }
         }
     }
     assert_eq!(
-        ENCHANTMENTS
+        t.enchantments
             .iter()
             .filter(|e| e.in_enchanting_table)
             .count(),
@@ -160,17 +169,18 @@ fn table_never_rolls_non_table_enchantments() {
 /// must reach enchantments no sword can get. Without the bypass a book rolls nothing.
 #[test]
 fn books_accept_enchantments_swords_cannot() {
+    let t = default_table();
     let mut book_only = 0;
     let sword_reachable: Vec<usize> = (0..SEEDS)
         .flat_map(|s| {
-            (0..3).flat_map(move |slot| enchantments_in_slot(s, slot, "diamond_sword", 30))
+            (0..3).flat_map(move |slot| enchantments_in_slot(t, s, slot, "diamond_sword", 30))
         })
         .map(|r| r.enchantment)
         .collect();
 
     for s in 0..SEEDS {
         for slot in 0..3 {
-            for r in enchantments_in_slot(s, slot, "book", 30) {
+            for r in enchantments_in_slot(t, s, slot, "book", 30) {
                 if !sword_reachable.contains(&r.enchantment) {
                     book_only += 1;
                 }
@@ -185,17 +195,19 @@ fn books_accept_enchantments_swords_cannot() {
 
 #[test]
 fn unknown_or_unenchantable_items_roll_nothing() {
+    let t = default_table();
     for s in 0..1_000 {
-        assert!(enchantments_in_slot(s, 0, "not_a_real_item", 30).is_empty());
-        assert!(enchantments_in_slot(s, 0, "dirt", 30).is_empty());
+        assert!(enchantments_in_slot(t, s, 0, "not_a_real_item", 30).is_empty());
+        assert!(enchantments_in_slot(t, s, 0, "dirt", 30).is_empty());
     }
 }
 
 #[test]
 fn rolls_are_deterministic() {
+    let t = default_table();
     for s in 0..2_000 {
-        let a = enchantments_in_slot(s, 1, "diamond_sword", 25);
-        let b = enchantments_in_slot(s, 1, "diamond_sword", 25);
+        let a = enchantments_in_slot(t, s, 1, "diamond_sword", 25);
+        let b = enchantments_in_slot(t, s, 1, "diamond_sword", 25);
         assert_eq!(a, b);
     }
 }
@@ -204,8 +216,9 @@ fn rolls_are_deterministic() {
 /// were omitted, books would show strictly more enchantments on average than they do.
 #[test]
 fn books_lose_one_enchantment() {
+    let t = default_table();
     let multi = (0..SEEDS)
-        .filter(|&s| enchantments_in_slot(s, 2, "book", 30).len() > 1)
+        .filter(|&s| enchantments_in_slot(t, s, 2, "book", 30).len() > 1)
         .count();
     assert!(
         multi > 0,
@@ -215,7 +228,7 @@ fn books_lose_one_enchantment() {
     // A book at high level rolls several candidates; after the removal it must never
     // exceed what a comparable non-book item reaches under the same conditions.
     let book_max = (0..SEEDS)
-        .map(|s| enchantments_in_slot(s, 2, "book", 30).len())
+        .map(|s| enchantments_in_slot(t, s, 2, "book", 30).len())
         .max()
         .unwrap();
     assert!(book_max >= 1);
@@ -227,6 +240,7 @@ fn books_lose_one_enchantment() {
 #[test]
 fn loop_halves_after_the_roll_not_before() {
     use enchant::JavaRandom;
+    let t = default_table();
 
     // Mirror of the guide's ordering, using the same helpers via the public surface.
     fn guide_order_count(xp_seed: i32, slot: usize, ench: i32, mut level: i32) -> usize {
@@ -246,7 +260,7 @@ fn loop_halves_after_the_roll_not_before() {
     }
 
     let ours: usize = (0..3_000)
-        .map(|s| enchantments_in_slot(s, 0, "diamond_sword", 30).len())
+        .map(|s| enchantments_in_slot(t, s, 0, "diamond_sword", 30).len())
         .sum();
     let guide: usize = (0..3_000).map(|s| guide_order_count(s, 0, 10, 30)).sum();
     assert_ne!(

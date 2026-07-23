@@ -5,15 +5,24 @@
 //! the item's, +1 per incompatible, level-merge rules, 40-level cap), NOT copied from
 //! in-game observation. They pin the implementation to the rules; cross-checking the rules
 //! themselves against a real anvil is the separate manual step Part 10.6 calls for.
+//!
+//! Run against the default version's table (Part 13.3), passed explicitly to the anvil API.
 
 use enchant::anvil::{
     TOO_EXPENSIVE_LIMIT, book_cost_multiplier, cheapest_linear_order, combine_sequence,
 };
-use enchant::data::{ENCHANTMENTS, index_of};
-use enchant::{AnvilItem, combine};
+use enchant::data::EnchantmentData;
+use enchant::{AnvilItem, combine, default_table};
+
+/// The default table's enchantment slice — every anvil call is scoped to it.
+fn ench() -> &'static [EnchantmentData] {
+    default_table().enchantments
+}
 
 fn ix(name: &str) -> usize {
-    index_of(name).unwrap_or_else(|| panic!("{name} not in table"))
+    default_table()
+        .index_of(name)
+        .unwrap_or_else(|| panic!("{name} not in table"))
 }
 
 fn item(name: &str, pw: u32, ench: &[(&str, i32)]) -> AnvilItem {
@@ -28,9 +37,9 @@ fn book(pw: u32, ench: &[(&str, i32)]) -> AnvilItem {
 /// values that make the whole calculator right or 2x wrong, so pin them explicitly.
 #[test]
 fn cost_multipliers_match_the_wiki() {
-    assert_eq!(ENCHANTMENTS[ix("sharpness")].anvil_cost, 1);
+    assert_eq!(ench()[ix("sharpness")].anvil_cost, 1);
     assert_eq!(
-        ENCHANTMENTS[ix("fire_aspect")].anvil_cost,
+        ench()[ix("fire_aspect")].anvil_cost,
         4,
         "wiki: 4x from item"
     );
@@ -45,6 +54,7 @@ fn cost_multipliers_match_the_wiki() {
 fn book_onto_fresh_item() {
     // Fire Aspect II book -> sword: 2 * bookMult(4)=2 => 4.
     let r = combine(
+        ench(),
         &item("diamond_sword", 0, &[]),
         &book(0, &[("fire_aspect", 2)]),
         false,
@@ -59,11 +69,13 @@ fn book_onto_fresh_item() {
 #[test]
 fn item_source_costs_double_the_book() {
     let from_book = combine(
+        ench(),
         &item("diamond_sword", 0, &[]),
         &book(0, &[("fire_aspect", 2)]),
         false,
     );
     let from_item = combine(
+        ench(),
         &item("diamond_sword", 0, &[]),
         &item("diamond_sword", 0, &[("fire_aspect", 2)]),
         false,
@@ -77,6 +89,7 @@ fn item_source_costs_double_the_book() {
 fn equal_levels_combine_up() {
     // Sharpness III + III -> IV, cost 4 * itemMult(1) = 4.
     let r = combine(
+        ench(),
         &item("diamond_sword", 0, &[("sharpness", 3)]),
         &item("diamond_sword", 0, &[("sharpness", 3)]),
         false,
@@ -89,6 +102,7 @@ fn equal_levels_combine_up() {
 #[test]
 fn max_level_is_capped() {
     let r = combine(
+        ench(),
         &item("diamond_sword", 0, &[("sharpness", 5)]),
         &item("diamond_sword", 0, &[("sharpness", 5)]),
         false,
@@ -105,6 +119,7 @@ fn max_level_is_capped() {
 #[test]
 fn unequal_levels_take_the_higher() {
     let sac_higher = combine(
+        ench(),
         &item("diamond_sword", 0, &[("sharpness", 2)]),
         &book(0, &[("sharpness", 4)]),
         false,
@@ -112,6 +127,7 @@ fn unequal_levels_take_the_higher() {
     assert_eq!(sac_higher.result, vec![(ix("sharpness"), 4)]);
 
     let target_higher = combine(
+        ench(),
         &item("diamond_sword", 0, &[("sharpness", 4)]),
         &book(0, &[("sharpness", 2)]),
         false,
@@ -128,6 +144,7 @@ fn unequal_levels_take_the_higher() {
 fn prior_work_penalty_is_exponential_on_both_items() {
     // Both worked 3 times -> penalty 7 each = 14, plus a trivial enchantment cost.
     let r = combine(
+        ench(),
         &item("diamond_sword", 3, &[]),
         &book(3, &[("sharpness", 1)]),
         false,
@@ -143,11 +160,13 @@ fn prior_work_penalty_is_exponential_on_both_items() {
 #[test]
 fn rename_adds_one_level() {
     let plain = combine(
+        ench(),
         &item("diamond_sword", 0, &[]),
         &book(0, &[("unbreaking", 1)]),
         false,
     );
     let renamed = combine(
+        ench(),
         &item("diamond_sword", 0, &[]),
         &book(0, &[("unbreaking", 1)]),
         true,
@@ -160,6 +179,7 @@ fn rename_adds_one_level() {
 fn incompatible_enchantment_costs_one_and_is_dropped() {
     // Sword has Smite; a Sharpness book conflicts (same exclusive set).
     let r = combine(
+        ench(),
         &item("diamond_sword", 0, &[("smite", 4)]),
         &book(0, &[("sharpness", 5)]),
         false,
@@ -177,6 +197,7 @@ fn incompatible_enchantment_costs_one_and_is_dropped() {
 fn inapplicable_enchantment_is_dropped_free() {
     // Sharpness supports swords and axes, not pickaxes.
     let r = combine(
+        ench(),
         &item("diamond_pickaxe", 0, &[]),
         &book(0, &[("sharpness", 5)]),
         false,
@@ -188,7 +209,7 @@ fn inapplicable_enchantment_is_dropped_free() {
 /// A book target accepts enchantments regardless of item type.
 #[test]
 fn book_target_accepts_anything() {
-    let r = combine(&book(0, &[]), &book(0, &[("sharpness", 5)]), false);
+    let r = combine(ench(), &book(0, &[]), &book(0, &[("sharpness", 5)]), false);
     assert_eq!(r.result, vec![(ix("sharpness"), 5)]);
 }
 
@@ -196,6 +217,7 @@ fn book_target_accepts_anything() {
 #[test]
 fn too_expensive_over_the_cap() {
     let r = combine(
+        ench(),
         &item("diamond_sword", 6, &[]),
         &book(0, &[("sharpness", 1)]),
         false,
@@ -214,8 +236,8 @@ fn cheapest_order_is_no_worse_than_any_order() {
         book(0, &[("mending", 1)]),
         book(0, &[("fire_aspect", 2)]),
     ];
-    let (best, order) = cheapest_linear_order(&target, &sacs);
-    let (as_given, _) = combine_sequence(&target, &sacs);
+    let (best, order) = cheapest_linear_order(ench(), &target, &sacs);
+    let (as_given, _) = combine_sequence(ench(), &target, &sacs);
     assert!(
         best <= as_given,
         "solver must not be worse than the given order"
@@ -232,6 +254,7 @@ fn cheapest_order_is_no_worse_than_any_order() {
 fn sequence_chains_prior_work() {
     let target = item("diamond_sword", 0, &[]);
     let (_total, final_item) = combine_sequence(
+        ench(),
         &target,
         &[book(0, &[("sharpness", 5)]), book(0, &[("unbreaking", 3)])],
     );

@@ -845,12 +845,21 @@ check('regression', 'terrain surface at that column is above the sulfur band',
 M._free(hP); M._free(iP);
 
 console.log('\ncalculators');
-check('regression', 'enchant table version', app.enchant_version(), MC);
+// The enchant calculator is now multi-version (Part 13.3): a per-version registry, indexed by
+// version string. The default is the newest transcribed table, currently 1.21.3.
+check('regression', 'enchant default version', app.enchant_default_version(), MC);
+check('ground', 'enchant version registry is non-empty and includes the default',
+  app.enchant_versions().includes(app.enchant_default_version()), true);
+// An unknown version resolves to the default table rather than erroring, so the UI can never
+// wedge on a stale version string.
+check('ground', 'an unknown enchant version falls back rather than failing',
+  app.anvil_optimize('not-a-version', 'fortune=3,unbreaking=3', 0).total,
+  app.anvil_optimize(MC, 'fortune=3,unbreaking=3', 0).total);
 // Fortune III + Unbreaking III onto a blank pickaxe, cross-checked on a real 1.21.3 anvil.
-check('ground', 'anvil: fortune 3 + unbreaking 3 costs 10', app.anvil_optimize('fortune=3,unbreaking=3', 0).total, 10);
+check('ground', 'anvil: fortune 3 + unbreaking 3 costs 10', app.anvil_optimize(MC, 'fortune=3,unbreaking=3', 0).total, 10);
 // Applying the same books to an item already worked twice costs more.
-check('regression', 'anvil: fortune 3 at prior work 2', app.anvil_optimize('fortune=3', 2).total, 9);
-check('regression', 'grid rows for a diamond pickaxe', app.enchant_applicable('diamond_pickaxe').length, 6);
+check('regression', 'anvil: fortune 3 at prior work 2', app.anvil_optimize(MC, 'fortune=3', 2).total, 9);
+check('regression', 'grid rows for a diamond pickaxe', app.enchant_applicable(MC, 'diamond_pickaxe').length, 6);
 
 console.log(`\n${failures ? `${failures} FAILURE(S)` : 'smoke test passed'}`);
 process.exit(failures ? 1 : 0);

@@ -30,10 +30,10 @@
 //! The printed cost is what a survival anvil's level counter should show — compare it there.
 
 use enchant::anvil::TOO_EXPENSIVE_LIMIT;
-use enchant::data::index_of;
-use enchant::{AnvilItem, ENCHANTMENTS, MC_VERSION, combine};
+use enchant::data::VersionTable;
+use enchant::{AnvilItem, MC_VERSION, combine, default_table};
 
-fn parse_side(tokens: &[String]) -> AnvilItem {
+fn parse_side(table: &VersionTable, tokens: &[String]) -> AnvilItem {
     let (item_tok, ench_toks) = tokens.split_first().expect("each side needs an item");
     let (name, pw) = match item_tok.split_once(':') {
         Some((n, p)) => (
@@ -48,18 +48,20 @@ fn parse_side(tokens: &[String]) -> AnvilItem {
             let (e, l) = t
                 .split_once('=')
                 .unwrap_or_else(|| panic!("expected ench=level, got {t}"));
-            let idx = index_of(e).unwrap_or_else(|| panic!("unknown enchantment: {e}"));
+            let idx = table
+                .index_of(e)
+                .unwrap_or_else(|| panic!("unknown enchantment: {e}"));
             (idx, l.parse::<i32>().expect("level must be an integer"))
         })
         .collect();
     AnvilItem::new(&name, pw, enchantments)
 }
 
-fn describe(it: &AnvilItem) -> String {
+fn describe(table: &VersionTable, it: &AnvilItem) -> String {
     let ench: Vec<String> = it
         .enchantments
         .iter()
-        .map(|&(i, l)| format!("{} {l}", ENCHANTMENTS[i].name))
+        .map(|&(i, l)| format!("{} {l}", table.get(i).name))
         .collect();
     format!(
         "{}{} [{}]",
@@ -86,8 +88,9 @@ fn main() {
         eprintln!("usage: anvil <target> [ench=lvl ...] + <sacrifice> [ench=lvl ...] [--rename]");
         std::process::exit(2);
     });
-    let target = parse_side(&args[..split]);
-    let sacrifice = parse_side(&args[split + 1..]);
+    let table = default_table();
+    let target = parse_side(table, &args[..split]);
+    let sacrifice = parse_side(table, &args[split + 1..]);
 
     // A multi-enchantment book at pw 0 is almost always a modelling slip: in survival such
     // a book was combined from single-enchantment books and so carries prior work. Warn,
@@ -103,11 +106,11 @@ fn main() {
         }
     }
 
-    let r = combine(&target, &sacrifice, rename);
+    let r = combine(table.enchantments, &target, &sacrifice, rename);
 
     println!("utilities.mc anvil calculator — Minecraft {MC_VERSION}\n");
-    println!("target    : {}", describe(&target));
-    println!("sacrifice : {}", describe(&sacrifice));
+    println!("target    : {}", describe(table, &target));
+    println!("sacrifice : {}", describe(table, &sacrifice));
     if rename {
         println!("rename    : yes (+1)");
     }
@@ -124,7 +127,7 @@ fn main() {
     let result: Vec<String> = r
         .result
         .iter()
-        .map(|&(i, l)| format!("{} {l}", ENCHANTMENTS[i].name))
+        .map(|&(i, l)| format!("{} {l}", table.get(i).name))
         .collect();
     println!("result    : {} [{}]", target.item, result.join(", "));
     println!("next prior work: x{}", r.result_prior_work);

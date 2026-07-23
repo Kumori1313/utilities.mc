@@ -17,7 +17,7 @@ pub mod optimize;
 pub mod table;
 
 pub use anvil::{AnvilItem, CombineResult, combine, combine_sequence};
-pub use data::{ENCHANTMENTS, MC_VERSION, enchantability};
+pub use data::{EnchantmentData, MC_VERSION, TABLES, VersionTable, default_table, table, versions};
 pub use enchant::{Roll, enchantments_in_slot};
 pub use java_random::JavaRandom;
 pub use table::{offered_levels, raw_levels};

@@ -6,9 +6,12 @@
 //! use the SAME seed or nothing will line up. Bookshelves 0..=15. Items default to a
 //! representative spread if none are given.
 
-use enchant::{MC_VERSION, enchantments_in_slot, offered_levels};
+use enchant::{MC_VERSION, default_table, enchantments_in_slot, offered_levels};
 
 fn main() {
+    // The default (newest) version's table. A `--version` selector belongs in the UI wiring
+    // (Part 13.5); this cross-reference CLI stays on the default for now.
+    let table = default_table();
     let args: Vec<String> = std::env::args().skip(1).collect();
     if args.len() < 2 {
         eprintln!("usage: predict <xp_seed> <bookshelves> [item ...]");
@@ -50,10 +53,10 @@ fn main() {
                 println!("  slot {}: (not offered)", slot + 1);
                 continue;
             }
-            let rolls = enchantments_in_slot(xp_seed, slot, item, lv);
+            let rolls = enchantments_in_slot(table, xp_seed, slot, item, lv);
             let list: Vec<String> = rolls
                 .iter()
-                .map(|r| format!("{} {}", r.name(), r.level))
+                .map(|r| format!("{} {}", r.name(table), r.level))
                 .collect();
             println!(
                 "  slot {} (lvl {lv:>2}): {}",

@@ -17,7 +17,7 @@
 //! combining a tool with its raw material) or durability repair, which add their own costs —
 //! those are out of scope for an enchantment planner.
 
-use crate::data::ENCHANTMENTS;
+use crate::data::EnchantmentData;
 
 /// Survival anvils refuse an operation costing more than this many levels.
 pub const TOO_EXPENSIVE_LIMIT: i32 = 39;
@@ -78,28 +78,31 @@ pub fn book_cost_multiplier(anvil_cost: i32) -> i32 {
 /// conflicting enchantments form mutually-exclusive groups a valid item holds one of — but
 /// the anvil charges "+1 per incompatible enchantment on the target", so count rather than
 /// flag.
-fn conflict_count(ench: usize, present: &[(usize, i32)]) -> i32 {
+fn conflict_count(table: &[EnchantmentData], ench: usize, present: &[(usize, i32)]) -> i32 {
     present
         .iter()
-        .filter(|&&(other, _)| other != ench && ENCHANTMENTS[ench].exclusive_with.contains(&other))
+        .filter(|&&(other, _)| other != ench && table[ench].exclusive_with.contains(&other))
         .count() as i32
 }
 
-fn applies_to(ench: usize, target: &AnvilItem) -> bool {
+fn applies_to(table: &[EnchantmentData], ench: usize, target: &AnvilItem) -> bool {
     // A book target accepts any enchantment. Otherwise the enchantment must support the
     // item type — the broad `supported_items`, not the table-only `primary_items`.
-    target.is_book()
-        || ENCHANTMENTS[ench]
-            .supported_items
-            .contains(&target.item.as_str())
+    target.is_book() || table[ench].supported_items.contains(&target.item.as_str())
 }
 
 /// Combine `sacrifice` into `target`, optionally renaming. `target` keeps its form; the
-/// sacrifice's enchantments transfer onto it.
+/// sacrifice's enchantments transfer onto it. Enchantment indices in both items are scoped
+/// to `table`.
 ///
 /// Cost = both items' prior-work penalties + per-enchantment costs + 1 per incompatible
 /// sacrifice enchantment + 1 if renamed.
-pub fn combine(target: &AnvilItem, sacrifice: &AnvilItem, rename: bool) -> CombineResult {
+pub fn combine(
+    table: &[EnchantmentData],
+    target: &AnvilItem,
+    sacrifice: &AnvilItem,
+    rename: bool,
+) -> CombineResult {
     let mut cost = target.prior_work_penalty() + sacrifice.prior_work_penalty();
     if rename {
         cost += 1;
@@ -110,18 +113,18 @@ pub fn combine(target: &AnvilItem, sacrifice: &AnvilItem, rename: bool) -> Combi
     for &(ench, slvl) in &sacrifice.enchantments {
         // An enchantment the target item cannot hold is simply not transferred, at no cost
         // — unless the target is a book, which holds anything.
-        if !applies_to(ench, target) {
+        if !applies_to(table, ench, target) {
             continue;
         }
 
         // Incompatible with something already on the result: not applied, +1 per conflict.
-        let conflicts = conflict_count(ench, &result);
+        let conflicts = conflict_count(table, ench, &result);
         if conflicts > 0 {
             cost += conflicts;
             continue;
         }
 
-        let max = ENCHANTMENTS[ench].max_level;
+        let max = table[ench].max_level;
         let existing = result.iter().position(|&(e, _)| e == ench);
         let tlvl = existing.map(|i| result[i].1).unwrap_or(0);
 
@@ -134,9 +137,9 @@ pub fn combine(target: &AnvilItem, sacrifice: &AnvilItem, rename: bool) -> Combi
         .min(max);
 
         let mult = if sacrifice.is_book() {
-            book_cost_multiplier(ENCHANTMENTS[ench].anvil_cost)
+            book_cost_multiplier(table[ench].anvil_cost)
         } else {
-            ENCHANTMENTS[ench].anvil_cost
+            table[ench].anvil_cost
         };
         cost += new_level * mult;
 
@@ -158,11 +161,15 @@ pub fn combine(target: &AnvilItem, sacrifice: &AnvilItem, rename: bool) -> Combi
 /// Fold a list of sacrifices into a target left to right, summing cost. Returns the total
 /// and the final item. Order matters: prior-work penalty compounds, so a different order
 /// can cost differently — see [`cheapest_linear_order`].
-pub fn combine_sequence(target: &AnvilItem, sacrifices: &[AnvilItem]) -> (i32, AnvilItem) {
+pub fn combine_sequence(
+    table: &[EnchantmentData],
+    target: &AnvilItem,
+    sacrifices: &[AnvilItem],
+) -> (i32, AnvilItem) {
     let mut current = target.clone();
     let mut total = 0;
     for s in sacrifices {
-        let r = combine(&current, s, false);
+        let r = combine(table, &current, s, false);
         total += r.cost;
         current = AnvilItem {
             item: current.item,
@@ -181,7 +188,11 @@ pub fn combine_sequence(target: &AnvilItem, sacrifices: &[AnvilItem]) -> (i32, A
 /// sometimes beat every linear order because prior-work penalty grows with depth. This
 /// finds the best *chain*, which is what a player adding items one at a time actually does,
 /// and never claims more.
-pub fn cheapest_linear_order(target: &AnvilItem, sacrifices: &[AnvilItem]) -> (i32, Vec<usize>) {
+pub fn cheapest_linear_order(
+    table: &[EnchantmentData],
+    target: &AnvilItem,
+    sacrifices: &[AnvilItem],
+) -> (i32, Vec<usize>) {
     let n = sacrifices.len();
     let mut idx: Vec<usize> = (0..n).collect();
     let mut best_cost = i32::MAX;
@@ -189,7 +200,7 @@ pub fn cheapest_linear_order(target: &AnvilItem, sacrifices: &[AnvilItem]) -> (i
 
     permute(&mut idx, 0, &mut |order| {
         let seq: Vec<AnvilItem> = order.iter().map(|&i| sacrifices[i].clone()).collect();
-        let (cost, _) = combine_sequence(target, &seq);
+        let (cost, _) = combine_sequence(table, target, &seq);
         if cost < best_cost {
             best_cost = cost;
             best_order = order.to_vec();

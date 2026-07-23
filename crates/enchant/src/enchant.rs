@@ -23,22 +23,26 @@
 //!    consumes RNG, so omitting it desyncs everything after it.
 
 use crate::JavaRandom;
-use crate::data::{ENCHANTMENTS, EnchantmentData, enchantability};
+use crate::data::{EnchantmentData, VersionTable};
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub struct Roll {
-    /// Index into [`ENCHANTMENTS`].
+    /// Index into the roll's version table (the one passed to
+    /// [`enchantments_in_slot`]). Version-scoped — resolve it against that same table.
     pub enchantment: usize,
     pub level: i32,
 }
 
 impl Roll {
-    pub fn data(&self) -> &'static EnchantmentData {
-        &ENCHANTMENTS[self.enchantment]
+    /// The enchantment this roll names. `table` must be the one the roll was produced
+    /// against; a different version's table would resolve the index to a different
+    /// enchantment.
+    pub fn data(&self, table: &VersionTable) -> &'static EnchantmentData {
+        table.get(self.enchantment)
     }
 
-    pub fn name(&self) -> &'static str {
-        self.data().name
+    pub fn name(&self, table: &VersionTable) -> &'static str {
+        table.get(self.enchantment).name
     }
 }
 
@@ -73,10 +77,10 @@ fn modify_level(r: &mut JavaRandom, level: i32, ench: i32) -> i32 {
 /// - Books accept **any** table enchantment regardless of item applicability — vanilla's
 ///   check is `isPrimaryItem(stack) || stack.is(Items.BOOK)`. Without the bypass a book
 ///   matches nothing at all and rolls empty.
-fn candidates(item: &str, level: i32) -> Vec<Roll> {
+fn candidates(table: &VersionTable, item: &str, level: i32) -> Vec<Roll> {
     let is_book = item == "book";
     let mut out = Vec::new();
-    for (i, e) in ENCHANTMENTS.iter().enumerate() {
+    for (i, e) in table.enchantments.iter().enumerate() {
         if !e.in_enchanting_table {
             continue;
         }
@@ -97,14 +101,14 @@ fn candidates(item: &str, level: i32) -> Vec<Roll> {
 }
 
 /// Java's `WeightedRandom.getRandomItem`: draw in `[0, total)`, then walk subtracting.
-fn weighted_pick(r: &mut JavaRandom, pool: &[Roll]) -> Option<Roll> {
-    let total: i32 = pool.iter().map(|c| c.data().weight).sum();
+fn weighted_pick(table: &VersionTable, r: &mut JavaRandom, pool: &[Roll]) -> Option<Roll> {
+    let total: i32 = pool.iter().map(|c| c.data(table).weight).sum();
     if total <= 0 {
         return None;
     }
     let mut w = r.next_int_bound(total);
     for c in pool {
-        w -= c.data().weight;
+        w -= c.data(table).weight;
         if w < 0 {
             return Some(*c);
         }
@@ -112,16 +116,23 @@ fn weighted_pick(r: &mut JavaRandom, pool: &[Roll]) -> Option<Roll> {
     None
 }
 
-fn compatible(a: usize, b: usize) -> bool {
-    a != b && !ENCHANTMENTS[a].exclusive_with.contains(&b)
+fn compatible(table: &VersionTable, a: usize, b: usize) -> bool {
+    a != b && !table.get(a).exclusive_with.contains(&b)
 }
 
-/// Roll the enchantments a table slot would produce.
+/// Roll the enchantments a table slot would produce, against `table`'s version.
 ///
 /// `level` is the slot's offered level from [`crate::offered_levels`]. Returns an empty
 /// list if the item is unknown or has zero enchantability, matching the game's early-out.
-pub fn enchantments_in_slot(xp_seed: i32, slot: usize, item: &str, level: i32) -> Vec<Roll> {
-    let Some(ench) = enchantability(item) else {
+/// The returned [`Roll`] indices are scoped to `table`.
+pub fn enchantments_in_slot(
+    table: &VersionTable,
+    xp_seed: i32,
+    slot: usize,
+    item: &str,
+    level: i32,
+) -> Vec<Roll> {
+    let Some(ench) = table.enchantability(item) else {
         return Vec::new();
     };
     if ench <= 0 {
@@ -133,13 +144,13 @@ pub fn enchantments_in_slot(xp_seed: i32, slot: usize, item: &str, level: i32) -
     let mut r = JavaRandom::new(xp_seed as i64 + slot as i64);
 
     let mut level = modify_level(&mut r, level, ench);
-    let mut pool = candidates(item, level);
+    let mut pool = candidates(table, item, level);
     let mut picked: Vec<Roll> = Vec::new();
 
     if pool.is_empty() {
         return picked;
     }
-    if let Some(first) = weighted_pick(&mut r, &pool) {
+    if let Some(first) = weighted_pick(table, &mut r, &pool) {
         picked.push(first);
     }
 
@@ -147,12 +158,12 @@ pub fn enchantments_in_slot(xp_seed: i32, slot: usize, item: &str, level: i32) -
     while r.next_int_bound(50) <= level {
         if let Some(last) = picked.last() {
             let last_idx = last.enchantment;
-            pool.retain(|c| compatible(c.enchantment, last_idx));
+            pool.retain(|c| compatible(table, c.enchantment, last_idx));
         }
         if pool.is_empty() {
             break;
         }
-        match weighted_pick(&mut r, &pool) {
+        match weighted_pick(table, &mut r, &pool) {
             Some(next) => picked.push(next),
             None => break,
         }

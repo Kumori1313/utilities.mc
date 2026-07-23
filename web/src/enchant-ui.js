@@ -43,34 +43,38 @@ function itemOptions(lines) {
 }
 
 export function setupEnchant(root, app) {
-  // Two dropdowns, deliberately different. The table roll depends on the item's
-  // enchantability, so every material variant is a distinct choice. An anvil plan does not —
-  // the applicable set is identical across a kind's variants and cost is material-independent
-  // — so the planner lists each kind once.
-  const tableItems = itemOptions(app.enchant_table_items());
-  const anvilItemOpts = app
-    .anvil_items()
-    .map((line) => {
-      const [kind, id] = line.split('|');
-      return `<option value="${id}">${title(kind)}</option>`;
-    })
+  // The enchant tab carries its own version, independent of the seed map's — world
+  // generation and enchantment tables are versioned separately, and only versions with a
+  // transcribed table can be offered here (Part 13.1 / 13.3). Newest first; default is the
+  // newest carried.
+  const enchVersions = app.enchant_versions();
+  let version = app.enchant_default_version();
+
+  const versionOpts = enchVersions
+    .map((v) => `<option value="${v}"${v === version ? ' selected' : ''}>${v}</option>`)
     .join('');
+  // Only one version transcribed so far reads as a limitation, not a bug; say how many.
+  const coverage =
+    enchVersions.length > 1
+      ? `${enchVersions.length} versions have transcribed tables; more appear here as they are added.`
+      : `Only ${version} has a transcribed table so far — more versions appear here as their tables are added and verified.`;
 
   root.innerHTML = `
     <h2>Enchantment calculator</h2>
-    <p class="sub">Predicts enchanting-table results for a given xp seed — Minecraft
-      <strong>${app.enchant_version()}</strong>. The xp seed is a per-player value that
-      re-rolls whenever you enchant.</p>
-    <p class="sub">This calculator is fixed to ${app.enchant_version()} and does
-      <strong>not</strong> follow the seed map's version selector: its tables are compiled in,
-      and only that one version has been transcribed. Enchantment weights and item sets differ
-      between versions, so results elsewhere would be quietly wrong rather than approximate.</p>
+    <p class="sub">Predicts enchanting-table results for a given xp seed. The xp seed is a
+      per-player value that re-rolls whenever you enchant.</p>
+    <p class="sub">Pick the version to predict for. Enchantment weights, costs and item sets
+      differ between versions, so this is a real choice — and it is separate from the seed
+      map's version, which controls world generation. ${coverage}</p>
 
     <div class="grid">
+      <label>version
+        <select id="e-version">${versionOpts}</select>
+      </label>
       <label>xp seed <input id="e-seed" value="-1234567" spellcheck="false"></label>
       <label>bookshelves <input id="e-shelves" type="number" min="0" max="15" value="15"></label>
       <label>item
-        <select id="e-item">${tableItems}</select>
+        <select id="e-item"></select>
       </label>
     </div>
 
@@ -90,7 +94,7 @@ export function setupEnchant(root, app) {
 
     <div class="grid">
       <label>item
-        <select id="an-item">${anvilItemOpts}</select>
+        <select id="an-item"></select>
       </label>
       <label>item's prior work <input id="an-pw" type="number" min="0" value="0"></label>
       <label class="chk"><input id="an-bypass" type="checkbox"> bypass conflict restrictions</label>
@@ -102,6 +106,28 @@ export function setupEnchant(root, app) {
 
   const $ = (id) => root.querySelector(id);
 
+  // Item lists are version-dependent (a version's item set can differ), so they are populated
+  // here and rebuilt on every version change rather than baked into the template once. A
+  // selection that the new version no longer offers falls back to the default.
+  function populateItems() {
+    const eItem = $('#e-item');
+    const prevTable = eItem.value;
+    eItem.innerHTML = itemOptions(app.enchant_table_items(version));
+    if ([...eItem.options].some((o) => o.value === prevTable)) eItem.value = prevTable;
+    else if ([...eItem.options].some((o) => o.value === 'diamond_sword')) eItem.value = 'diamond_sword';
+
+    const anItem = $('#an-item');
+    const prevAnvil = anItem.value;
+    anItem.innerHTML = app
+      .anvil_items(version)
+      .map((line) => {
+        const [kind, id] = line.split('|');
+        return `<option value="${id}">${title(kind)}</option>`;
+      })
+      .join('');
+    if ([...anItem.options].some((o) => o.value === prevAnvil)) anItem.value = prevAnvil;
+  }
+
   // --- table roll -----------------------------------------------------------
   function roll() {
     const seed = parseInt($('#e-seed').value, 10) | 0;
@@ -111,7 +137,7 @@ export function setupEnchant(root, app) {
     $('#e-rows').innerHTML = [0, 1, 2].map((slot) => {
       const lv = levels[slot];
       if (lv === 0) return `<tr class="empty"><td>${slot + 1}</td><td>—</td><td>not offered</td></tr>`;
-      const rolls = app.enchant_slot(seed, slot, item, lv);
+      const rolls = app.enchant_slot(version, seed, slot, item, lv);
       const list = rolls ? rolls.split('\n').map(fmt).join(', ') : '(nothing)';
       return `<tr><td>${slot + 1}</td><td>${lv}</td><td>${list}</td></tr>`;
     }).join('');
@@ -120,22 +146,22 @@ export function setupEnchant(root, app) {
 
   // --- anvil planner --------------------------------------------------------
   const sel = new Map(); // enchantment name -> { level, existing }
-  const conflictCache = new Map();
+  let conflictCache = new Map();
   const conflictsOf = (name) => {
-    if (!conflictCache.has(name)) conflictCache.set(name, new Set(app.enchant_conflicts(name)));
+    if (!conflictCache.has(name)) conflictCache.set(name, new Set(app.enchant_conflicts(version, name)));
     return conflictCache.get(name);
   };
 
   function renderGrid() {
     const item = $('#an-item').value;
     const bypass = $('#an-bypass').checked;
-    const applicable = app.enchant_applicable(item);
-    // Drop selections that no longer apply to the chosen item.
+    const applicable = app.enchant_applicable(version, item);
+    // Drop selections that no longer apply to the chosen item (or the chosen version).
     for (const n of [...sel.keys()]) if (!applicable.includes(n)) sel.delete(n);
     const chosen = [...sel.keys()];
 
     const rows = applicable.map((name) => {
-      const max = app.enchant_max_level(name);
+      const max = app.enchant_max_level(version, name);
       const cur = sel.get(name);
       const conflicted = !bypass && !cur && chosen.some((s) => conflictsOf(name).has(s));
       const cells = [1, 2, 3, 4, 5].map((L) => {
@@ -171,7 +197,7 @@ export function setupEnchant(root, app) {
     const out = $('#an-out');
     if (sel.size === 0) { out.innerHTML = '<span class="pw">select enchantments to plan a combine</span>'; return; }
 
-    const plan = app.anvil_optimize(spec, pw);
+    const plan = app.anvil_optimize(version, spec, pw);
     if (!plan) { out.innerHTML = '<span class="cost bad">too many enchantments to optimise</span>'; return; }
 
     const steps = plan.steps
@@ -206,10 +232,21 @@ export function setupEnchant(root, app) {
   $('#an-bypass').addEventListener('change', renderGrid);
   $('#an-pw').addEventListener('input', compute);
 
-  // Diamond is the interesting default; the lists themselves start at wooden.
-  const eItem = $('#e-item');
-  if ([...eItem.options].some((o) => o.value === 'diamond_sword')) eItem.value = 'diamond_sword';
+  // Switching version rebuilds everything version-dependent: the item lists, the conflict
+  // cache (conflicts are version-scoped), and the roll/grid. Selections the new version no
+  // longer offers are dropped by populateItems/renderGrid rather than silently recomputed
+  // against a substitute (Part 13.5).
+  $('#e-version').addEventListener('change', (e) => {
+    version = e.target.value;
+    conflictCache = new Map();
+    populateItems();
+    roll();
+    renderGrid();
+  });
 
+  // Diamond is the interesting default; the lists themselves start at wooden. populateItems
+  // applies that default and then the roll/grid render against it.
+  populateItems();
   roll();
   renderGrid();
 }
