@@ -1224,26 +1224,52 @@ another is now a pure-data operation — drop a `data/enchantments-<ver>.json` f
 The tables express what exists; they do not express how it behaves. Assume nothing here is
 version-independent merely because it currently passes for 1.21.3.
 
-- [ ] **Audit each rule for version sensitivity, and record the finding either way.** The roll
-      path (offered levels, the enchantability modifier, the ±15% triangular bonus, the
-      book-loses-one-enchantment draw) and the anvil path (the `2^n - 1` prior-work penalty, the
-      item-vs-book multiplier, the survival "too expensive" limit) each need a verdict: verified
-      identical across the versions you offer, or version-gated. An unexamined rule is not the
-      same as an unchanged one.
-- [ ] **Landmine — content changes silently shift the roll.** The weighted pick walks the
-      applicable enchantment list, so adding or removing an enchantment from a version changes
-      which one a given seed lands on — even for enchantments that themselves did not change. The
-      1.21 mace enchantments (density, breach, wind burst) are in the current dataset and are
-      exactly this kind of change. This is why per-version golden vectors are non-negotiable.
-- [ ] **Landmine — the anvil cross-checks were version-spanning by luck, not by design.** The
-      hand-verified anvil results matched on both 1.21.3 and 26.2, which is evidence those
-      mechanics are stable across that gap — not evidence that they are stable everywhere. The
-      untested span is the whole of 1.8.9 → 1.21.3, and that is where the risk sits. In
-      particular, confirm when the survival "too expensive" cap took its current form rather
-      than assuming the 39 in `TOO_EXPENSIVE_LIMIT` holds at the bottom of the range.
-- [ ] Where a rule genuinely differs, gate it on the version explicitly at the call site rather
-      than branching deep inside a helper, so the difference is visible when reading the
-      algorithm.
+**Audit done — the finding is that the 1.8.9 floor is doing heavy lifting.** Every rule below was
+checked against the minecraft.wiki History sections (Enchanting, Anvil), not assumed from the
+1.21.3 behaviour. The headline: **1.8 is exactly where both overhauls landed** — the modern
+3-slot/lapis/xp-seed enchanting selection *and* the exponential anvil penalty — so a floor at
+1.8.9 makes almost all logic uniform by construction. What varies across versions is content and
+parameters (captured per-dataset), not algorithms. There is **one** genuine intra-range logic
+boundary, at 1.9, and it is low-impact.
+
+| rule | layer | introduced / changed | uniform across 1.8.9+? | source |
+|---|---|---|---|---|
+| offered-level formula (3-slot, xp seed, bookshelf 0–15) | roll | 1.8 `14w02a`; bookshelf cap 15 since 1.3.1 | **yes** | Enchanting history |
+| `modify_level` — enchantability modifier + ±15% triangular bonus | roll | 1.8 selection algorithm | **yes** — "no algorithmic formula changes after 1.8" | Enchanting history |
+| candidate collection · weighted pick · loop-halving · book-loses-one | roll | 1.8 selection algorithm | **yes** | Enchanting history |
+| enchantment set · weights · cost windows · max levels · item tags · `in_enchanting_table` · `treasure` | **DATA** | per version | **no — captured per dataset** | — |
+| `2^n − 1` prior-work penalty | anvil | 1.8 `14w04a` (replaced a *linear* 1-per-use penalty) | **yes** | Anvil history |
+| rename costs +1 level | anvil | 1.8 `14w02a` | **yes** | Anvil history |
+| item-vs-book multiplier (book = half item, min 1) | anvil | — (per-enchantment values are data) | **yes** | Anvil mechanics |
+| "Too Expensive" cap = 39 (`TOO_EXPENSIVE_LIMIT`) | anvil | tied to the `14w04a` exponential system; no later change documented | **believed yes** — current value confirmed, no history entry shows a change | Anvil mechanics/history |
+| **rename incurs a prior-work penalty** | anvil | **removed in 1.9 `15w42a`** | **NO — boundary at 1.9** | Anvil history |
+
+- [x] **Roll path: uniform, confirmed.** The whole selection algorithm arrived in 1.8 and the
+      wiki records no formula change since. Nothing in the roll path needs version-gating within
+      the 1.8.9+ floor. (If the floor is ever lowered below 1.8, this collapses — pre-1.8 is a
+      structurally different enchanting system, not different numbers.)
+- [x] **Anvil path: uniform except one rule.** The exponential penalty, the +1 rename cost, and
+      the book/item multiplier all date to 1.8 or earlier and are stable. The lone exception is
+      that **renaming stopped incurring a prior-work penalty in 1.9 (`15w42a`)** — so a
+      *rename-only* operation raises prior work on 1.8.9 but not on 1.9+. Impact is small: it
+      touches only rename-only combines (the planner applies enchantments, which raise prior work
+      on every version anyway), and only the single sub-1.9 version the floor admits, 1.8.9. It is
+      documented at the call site (`anvil::combine`) and needs gating **only if** a 1.8.9 dataset
+      is ever added; nothing to do while the newest-only registry sits at 1.21.3.
+- [x] **The "too expensive" cap was the one to confirm, and it holds.** The current value (39;
+      i.e. 40+ refused) is confirmed against the wiki, and no history entry shows it ever differed
+      within range. The cap only became meaningful once the `14w04a` exponential penalty existed,
+      which is inside the floor. Marked believed-stable rather than certain, since the absence of
+      a history note is weaker evidence than a positive one — re-confirm if a pre-1.14 dataset is
+      added.
+- [x] **Content changes are real but are DATA, not logic.** The weighted pick walks the
+      applicable list, so adding/removing an enchantment (e.g. the 1.21 mace set) shifts which one
+      a seed lands on even for unchanged enchantments. This is exactly what per-version datasets
+      plus per-version golden vectors capture; the *algorithm* walking that list is unchanged.
+- [x] **Nothing to gate today.** The only version-dependent rule (1.9 rename) is above documented
+      and below the sole carried version. When a rule genuinely needs gating, do it at the call
+      site keyed on the resolved table's `mc_version`, not deep in a helper — the anvil comment
+      shows the intended shape.
 
 ## 13.5 — UI wiring, state migration, and verification
 

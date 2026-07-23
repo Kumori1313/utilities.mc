@@ -16,10 +16,27 @@
 //! Models enchantment merging + renaming. It does **not** model material repair (e.g.
 //! combining a tool with its raw material) or durability repair, which add their own costs —
 //! those are out of scope for an enchantment planner.
+//!
+//! # Version audit (Part 13.4)
+//!
+//! Every rule here is uniform across the 1.8.9+ floor, confirmed against the wiki's Anvil
+//! history, with ONE exception. The exponential `2^n - 1` prior-work penalty and the +1
+//! rename cost both arrived in 1.8 (`14w04a` / `14w02a`), and the "too expensive" cap and the
+//! book/item multiplier have not changed since. The exception: **renaming stopped incurring a
+//! prior-work penalty in 1.9 (`15w42a`)**. This model always raises prior work on a combine,
+//! which is correct for every enchantment merge on every version and for a rename-only combine
+//! on 1.8.9 — but wrong for a rename-only combine on 1.9+. It matters only for rename-only
+//! operations (the planner always merges enchantments, which raise prior work regardless) and
+//! only for the single sub-1.9 version the floor admits. Gate it on the table's `mc_version`
+//! here IF a 1.8.9 dataset is ever added; nothing to do while the registry is 1.21.3-only.
 
 use crate::data::EnchantmentData;
 
 /// Survival anvils refuse an operation costing more than this many levels.
+///
+/// 39 (so 40+ is refused) is confirmed against the wiki and tied to the exponential penalty
+/// introduced in 1.8 `14w04a`; no history entry shows it differing within the 1.8.9+ range
+/// (Part 13.4). Re-confirm if a pre-1.14 dataset is ever added.
 pub const TOO_EXPENSIVE_LIMIT: i32 = 39;
 
 /// One item entering the anvil: what it is, how many times it has been worked, and its

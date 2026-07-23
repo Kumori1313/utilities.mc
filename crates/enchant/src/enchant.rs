@@ -21,6 +21,17 @@
 //! 4. **Books.** The guide notes books accept more enchantments but omits that after
 //!    rolling, a book with more than one enchantment has one removed at random. That draw
 //!    consumes RNG, so omitting it desyncs everything after it.
+//!
+//! # Version audit (Part 13.4)
+//!
+//! This whole selection algorithm — the enchantability modifier, the ±15% triangular bonus,
+//! the highest-fitting-candidate collection, the weighted pick, the roll-then-halve loop, and
+//! the book removal — arrived with the 1.8 enchanting overhaul and the wiki records no formula
+//! change since, so it is uniform across the 1.8.9+ floor and takes no version branch. What
+//! DOES change per version is the enchantment set it walks (weights, cost windows, item tags),
+//! which is data: the `table` argument carries it, and adding/removing an enchantment shifts
+//! which one a given seed lands on even for unchanged enchantments. That is a data concern the
+//! per-version golden vectors pin, not a logic branch.
 
 use crate::JavaRandom;
 use crate::data::{EnchantmentData, VersionTable};

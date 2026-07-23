@@ -17,6 +17,14 @@
 //!
 //! Both are the sort of error that still produces believable output, which is why the
 //! published level-range tables are checked in `tests/table.rs` rather than trusted.
+//!
+//! # Version audit (Part 13.4)
+//!
+//! Version-independent across the 1.8.9+ floor, so this takes no version argument. The whole
+//! 3-slot / xp-seed / bookshelf system arrived in 1.8 (`14w02a`) and the wiki records no
+//! formula change since; the bookshelf cap of 15 dates to 1.3.1, below the floor. If the
+//! calculator's floor is ever lowered below 1.8, this is one of the rules that would need a
+//! second, structurally different implementation rather than a parameter tweak.
 
 use crate::JavaRandom;
 
