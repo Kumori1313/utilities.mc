@@ -1485,19 +1485,33 @@ bastions do not — while in 1.16–1.17 each rolled independently and some regi
       version-blind engine answering from 1.21.3 for everything passes the partition check and
       fails this one.
 
-- [ ] Check against Chunkbase. The Nether pair is the sharp test — 1.18 swapped which structure
-      each region gets, so a single coordinate changes *type*:
+- [x] **Checked externally; all assertions here are now ground truth.** The Nether pair was the
+      sharp test — 1.18 swapped which structure each region gets, so a single coordinate changes
+      *type*, which a version-blind tool cannot produce and a merely-shifted one would break the
+      controls on:
       | coordinate | 1.16 – 1.17 | 1.18+ |
       |---|---|---|
       | (192, 0) | fortress | bastion |
       | (112, 528) | bastion | fortress |
       | (336, -128) | fortress | fortress |
       | (-256, -432) | bastion | bastion |
-      A version-blind tool cannot produce a type swap, and one that merely shifted positions
-      would break the two controls. Also worth a baseline pass on 1.21.3, since nothing in the
-      Nether has ever been checked.
-      For End gateways, one coordinate per unverified regime: (-1501, 311) on 1.13,
-      (-1085, -403) on 1.16, (-1200, -132) on 1.17.
+      All four confirmed on both sides, plus a 1.21.3 baseline on the nearest fortress and
+      bastion — the first external check the Nether has ever had.
+- [x] **The End gateway coordinates needed a second source.** (-1501, 311) on 1.13,
+      (-1085, -403) on 1.16, (-1200, -132) on 1.17, all confirmed — but against
+      **mcseedmap.net**, not Chunkbase, which does not offer End gateways on 1.13. Recorded in
+      the assertion's comment because provenance naming the wrong site is worse than none:
+      anyone re-checking on Chunkbase would find the oldest unverifiable and conclude it was
+      fabricated. Worth remembering as a general point — when a boundary check reaches back far
+      enough, the reference tool may not reach with it, and the fix is a named second source
+      rather than dropping the old regime.
+
+**Where this leaves per-version structure coverage.** Verified across versions: outposts (1.14
+and 1.18 boundaries), desert pyramids (1.18 boundary), fortresses and bastions (1.18 swap), End
+cities (all versions, via invariance), End gateways (all four regimes). Still 1.21.3-only: the
+remaining Overworld types. Still unverified at any version: pre-1.18 Overworld boundaries at 1.9
+and 1.16 — every flip candidate failed the footprint screen, and that screen is uncalibrated
+below 1.18, so it needs a different method rather than more searching.
 
 ## 12.6 — Structure coverage beyond the verified four
 

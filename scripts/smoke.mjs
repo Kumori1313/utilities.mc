@@ -143,11 +143,13 @@ for (const [name, d, biome] of [['nether', -1, 'nether_wastes'], ['end', 1, 'the
   M._free(shb);
 }
 
+// Both confirmed against Chunkbase on seed 1 / 1.21.3, as part of the first external pass the
+// Nether ever had. Until then nothing in this dimension was checked at any version.
 eng.setWorld(BigInt.asUintN(64, 1n), mc, -1);
 const NS = createStructures(eng);
-check('regression', 'nearest nether fortress',
+check('ground', 'nearest nether fortress',
   NS.nearest(0, 0, 'fortress', 1).targets.map((t) => [t.x, t.z]), [[-96, 144]]);
-check('regression', 'nearest bastion',
+check('ground', 'nearest bastion',
   NS.nearest(0, 0, 'bastion', 1).targets.map((t) => [t.x, t.z]), [[192, 0]]);
 
 // Every End city position checked against Chunkbase on seed 1 / 1.21.3, encoded as a set. The
@@ -394,8 +396,11 @@ check('ground', 'Chunkbase-checked outpost that survives every version',
 
 // --- Nether and End structures across versions ---
 //
-// Both dimensions had NO external verification of structure positions at any version until now,
-// and the End's cities/gateways were checked only on 1.21.3. This is the per-version pass.
+// Both dimensions now have external verification. The Nether had none at any version before
+// this pass; the End had cities and gateways on 1.21.3 only. What carries the coverage further
+// than the checked coordinates is the pair of invariants below — End city positions never
+// change, so one verified version covers all of them, and the fortress/bastion partition is a
+// property of the configs rather than of any single position.
 //
 // Set up as its own helper because these need a dimension as well as a version.
 const boxIn = (verId, dim, type, r = 3000) => {
@@ -477,19 +482,23 @@ check('ground', 'before 1.18 some Nether regions hold neither',
 // The sharpest Nether test: 1.18 swapped which of the pair each region gets, so these two
 // coordinates exchange structure type across the boundary. A version-blind tool cannot produce
 // that, and neither can one that merely shifts positions.
+//
+// All four coordinates checked against Chunkbase on both sides of the boundary. The type swap
+// is what makes them worth the round trip — a position that merely moves proves the version
+// reached the generator, but a position that changes STRUCTURE proves the 1.18 rule itself.
 const V17 = eng.str2mc('1.17.1'), V18 = eng.str2mc('1.18.2');
-check('regression', 'a Nether region that swaps fortress for bastion at 1.18',
+check('ground', 'a Nether region that swaps fortress for bastion at 1.18',
   [hasAt(V17, -1, 'fortress', 192, 0), hasAt(V17, -1, 'bastion', 192, 0),
    hasAt(V18, -1, 'fortress', 192, 0), hasAt(V18, -1, 'bastion', 192, 0)],
   [true, false, false, true]);
-check('regression', 'and one that swaps the other way',
+check('ground', 'and one that swaps the other way',
   [hasAt(V17, -1, 'fortress', 112, 528), hasAt(V17, -1, 'bastion', 112, 528),
    hasAt(V18, -1, 'fortress', 112, 528), hasAt(V18, -1, 'bastion', 112, 528)],
   [false, true, true, false]);
 // Controls: unchanged across the same boundary, so the swap above is not just everything moving.
-check('regression', 'a fortress unchanged across 1.18',
+check('ground', 'a fortress unchanged across 1.18',
   [hasAt(V17, -1, 'fortress', 336, -128), hasAt(V18, -1, 'fortress', 336, -128)], [true, true]);
-check('regression', 'a bastion unchanged across 1.18',
+check('ground', 'a bastion unchanged across 1.18',
   [hasAt(V17, -1, 'bastion', -256, -432), hasAt(V18, -1, 'bastion', -256, -432)], [true, true]);
 
 // End cities: the position set is IDENTICAL in every version that has them. That matters
@@ -522,7 +531,12 @@ for (const v of registry) {
 }
 check('ground', 'End gateway regimes change exactly at the documented config boundaries',
   gwSeen.map(([l]) => l), ['1.8.9', '1.13.2', '1.16.1', '1.17.1', '1.18.2']);
-check('regression', 'nearest End gateway in each unverified regime',
+// One coordinate per regime the 1.21.3 pass did not reach. Checked against mcseedmap.net, NOT
+// Chunkbase — Chunkbase does not offer End gateways on 1.13, so a single source could not cover
+// all three. Recorded here because provenance that names the wrong site is worse than none:
+// anyone re-checking these on Chunkbase would find the oldest one unverifiable and conclude the
+// assertion was fabricated.
+check('ground', 'nearest End gateway in each regime the 1.21.3 pass did not cover',
   ['1.13.2', '1.16.1', '1.17.1'].map((l) => {
     eng.setWorld(BigInt.asUintN(64, 1n), eng.str2mc(l), 1);
     const G = createStructures(eng);
